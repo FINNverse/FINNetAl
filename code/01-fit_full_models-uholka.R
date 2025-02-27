@@ -5,10 +5,9 @@ library(glmmTMB)
 library(parallel)
 
 # adjust Epochs for 1 patch and 25 patches + 7 epochs and 35 epochs
-Nepochs_vec = c(2000L, 2000L, 2000L, 2000L, 2000L, 2000L, 2000L, 2000L)*0.5
+Nepochs_vec = c(1000L, 2000L, 1000L, 2000L)
 
 batchsize_vec = c(10L, 90L, 10L, 90L)
-
 paths = c(
   "data/Uholka/noSplits/species-period3-9patches/",
   "data/Uholka/noSplits/species-period3-1patch/",
@@ -16,24 +15,24 @@ paths = c(
   "data/Uholka/noSplits/species-period15-1patch/"
 )
 
-#paths = paths[!grepl("genus", paths)]
-# 
-# cl = parallel::makeCluster(4L)
-# nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
-# parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
-# parallel::clusterEvalQ(cl, {
-#   library(data.table)
-#   library(FINN)
-#   library(torch)
-#   library(glmmTMB)
-# })
-i=3
-# res = parallel::parLapply(cl, 1:length(paths), function(i) {
+paths = paths[!grepl("genus", paths)]
 
-  # myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
-  # dist = cbind(nodes,0:3)
-  # dev = as.integer(as.numeric(dist[which(dist[,1] %in% myself, arr.ind = TRUE), 2]))
-  # Sys.setenv(CUDA_VISIBLE_DEVICES=dev)
+cl = parallel::makeCluster(4L)
+nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
+parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
+parallel::clusterEvalQ(cl, {
+  library(data.table)
+  library(FINN)
+  library(torch)
+  library(glmmTMB)
+})
+
+res = parallel::parLapply(cl, 1:length(paths), function(i) {
+
+  myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
+  dist = cbind(nodes,0:3)
+  dev = as.integer(as.numeric(dist[which(dist[,1] %in% myself, arr.ind = TRUE), 2]))
+  Sys.setenv(CUDA_VISIBLE_DEVICES=dev)
 
   p = paths[i]
   Nepochs = Nepochs_vec[i]
@@ -57,7 +56,7 @@ i=3
     init_growth_env[is.na(init_growth_env)] = 0
     init_growth_env[abs(init_growth_env) > 5 & init_growth_env < 0] = -5
     init_growth_env[abs(init_growth_env) > 5 & init_growth_env > 0] = 5
-    
+
     ### mort ####
     env_obs$Fmort = scales::rescale(env_obs$mort, c(0.0001, 1-0.0001))
     mort_init_model = glmmTMB(Fmort~(Tmax+Tmin+Psum+Psd+awc):as.factor(species)+as.factor(species)+0, data = env_obs, family = beta_family())
@@ -65,14 +64,14 @@ i=3
     init_mort_env[is.na(init_mort_env)] = 0
     init_mort_env[abs(init_mort_env) > 5 & init_mort_env < 0] = -5
     init_mort_env[abs(init_mort_env) > 5 & init_mort_env > 0] = 5
-    
+
     ### reg ####
     reg_init_model = glmmTMB(reg~(Tmax+Tmin+Psum+Psd++awc):as.factor(species)+as.factor(species)+0, data = env_obs, family = "nbinom1")
     init_reg_env = matrix(summary(reg_init_model)$coefficients$cond[,1], Nspecies, Nenv+1)
     init_reg_env[is.na(init_reg_env)] = 0
     init_reg_env[abs(init_reg_env) > 5 & init_reg_env < 0] = -5
     init_reg_env[abs(init_reg_env) > 5 & init_reg_env > 0] = 5
-    
+
     m1 = finn(
       N_species = Nspecies,
       competition_process = createProcess(~0, func = FINN::competition, optimizeSpecies = TRUE),
@@ -80,18 +79,17 @@ i=3
       regeneration_process = createProcess(~., initEnv = list(init_reg_env |> as.matrix()), func = FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = T),
       mortality_process = createProcess(~., initEnv = list(init_mort_env  |> as.matrix()), func = FINN::mortality, optimizeSpecies = TRUE, optimizeEnv = T)
     )
-    
+
   cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = Nspecies)
   m1$fit(data = obs_dt, batchsize = batchsize, env = env_dt, init_cohort = cohort1,  epochs = Nepochs, patches = Npatches, lr = 0.01, checkpoints = 5L,
-         optimizer = torch::optim_adam, device = "cpu", record_gradients = FALSE,weights = c(0.1, 10, 1.0, 1, 1, 1), plot_progress = T,
+         optimizer = torch::optim_adam, device = "gpu", record_gradients = FALSE,weights = c(0.1, 10, 1.0, 1, 1, 1), plot_progress = F,
          loss= c(dbh = "mse", ba = "mse", trees = "nbinom", growth = "mse", mortality = "mse", regeneration = "nbinom")
   )
 
-  if(!dir.exists(("results/01_full/"))) dir.create("results/01_full/", recursive = T)
-  torch::torch_save(m1, path = paste0("results/01_full/",basename(p), "_full.pt"))
+  if(!dir.exists(("results/Uholka/01_full/"))) dir.create("results/Uholka/01_full/", recursive = T)
+  torch::torch_save(m1, path = paste0("results/Uholka/01_full/",basename(p), "_full.pt"))
 
   rm(m1)
   gc()
   torch::cuda_empty_cache()
-
 })
