@@ -20,7 +20,7 @@ dbh_cmTOba_m2 <- function(dbh) {
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 # raw data cleaning ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-all_trees <- fread("raw-data/ecy2845-sup-0001-datas1/uholka_trees.csv")
+all_trees <- fread("data/raw-data/ecy2845-sup-0001-datas1/uholka_trees.csv")
 # remove very rare species
 # rename species to simple scientific names
 all_trees[grepl("Acer platanoides", species), scientific_name := "Acer platanoides"]
@@ -47,8 +47,8 @@ all_trees <- merge(all_years, all_trees, by = c( "tree_nr", "year", "species", "
 
 # define status
 # status 1 Tree found (1) or not found (0) during inventory
-# status 2 Tree alive (1) or dead (0) 
-# status 3 Tree standing (1) or lying (0) 
+# status 2 Tree alive (1) or dead (0)
+# status 3 Tree standing (1) or lying (0)
 # status 4 Only for dead trees: entire tree (1) or broken tree (snag), (0)
 all_trees[status_2 == 1, status := "A"]
 all_trees[status_2 == 0, status := "D"]
@@ -78,11 +78,11 @@ plot(all_trees_clean$x_local, all_trees_clean$y_local, pch = 1,asp = 1)
 abline(h = y_breaks, v = x_breaks, col = "red")
 
 grid_list = create_grid(
-  all_trees_cleaned = all_trees_clean, 
-  x_length = x_length, 
-  y_length = y_length, 
-  x_range = x_range, 
-  y_range = y_range, 
+  all_trees_cleaned = all_trees_clean,
+  x_length = x_length,
+  y_length = y_length,
+  x_range = x_range,
+  y_range = y_range,
   patches2sites = c(3,3))
 
 grid_dt_1patch = grid_list$grid_dt_1patch
@@ -195,7 +195,7 @@ for(i_patches in c("1patch", "9patches")){
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## meteo data ####
 # get lon and lat for site from centroid of all patches
-points_dt <- fread("raw-data/ecy2845-sup-0001-datas1/uholka_points.csv")
+points_dt <- fread("data/raw-data/ecy2845-sup-0001-datas1/uholka_points.csv")
 centroid_dt <- points_dt[,.(
   x = mean(x_utm34n),
   y = mean(y_utm34n)
@@ -261,14 +261,14 @@ meteo_dt4 <- meteo_dt3[,.(
 cor(meteo_dt4[, -1], use = "pairwise.complete.obs")
 # only keep T2M_max T2M_min PRECTOTCORR due to correlations
 meteo_dt <- meteo_dt4[,.(
-  Tmax = T2M_max, 
-  Tmin = T2M_min, 
+  Tmax = T2M_max,
+  Tmin = T2M_min,
   Psum = PRECTOTCORR_sum,
   Psd = PRECTOTCORR_sd,
   year)]
 
 ## awc data ####
-awc_raster <- raster("raw-data/awc/nfk.eps1.tif")
+awc_raster <- raster("data/raw-data/awc/nfk.eps1.tif")
 grid_dt_1patch[,x_center := as.numeric(as.character(x_class)),]
 grid_dt_1patch[,y_center := as.numeric(as.character(y_class)),]
 
@@ -282,10 +282,10 @@ awc_dt$awc = extract(awc_raster, grid_shp)
 par(mar=c(2,2,2,2))
 plot(awc_raster)
 
-p_awc <- 
+p_awc <-
   ggplot(awc_dt)+
   geom_tile(aes(x = x_center, y = y_center, fill = awc))+
-  # add heat colors 
+  # add heat colors
   scale_fill_viridis_c()+
   coord_fixed()+
   theme_classic()+
@@ -308,7 +308,7 @@ ggsave(
 awc_dt_1patch <- awc_dt[,.(siteID = uniquePatch, awc)]
 fwrite(awc_dt_1patch, paste0(out_dir0, "/data-cleaning/site/awc_dt_1patch.csv"))
 awc_dt_9patches <- merge(
-  awc_dt[,.(uniquePatch, awc, x_center, y_center)], 
+  awc_dt[,.(uniquePatch, awc, x_center, y_center)],
   grid_dt_9patches[,.(siteID, patch, uniquePatch)], by = "uniquePatch"
   )
 awc_dt_9patches <- awc_dt_9patches[,.(
@@ -438,7 +438,7 @@ for(i_species in c("species")){
       obs_dt[is.na(trees), trees := 0,]
       obs_dt[is.na(reg) & year !=1 , reg := 0,]
       obs_dt$period_length <- unique(obs_dt[!is.na(period_length)]$period_length)
-      
+
       if(!all(table(obs_dt$species) == unique(table(obs_dt$species)))) stop("species entries not complete")
       if(!all(table(obs_dt$siteID) == unique(table(obs_dt$siteID)))) stop("site entries not complete")
       if(!all(table(obs_dt$year) == unique(table(obs_dt$year)))) stop("year entries not complete")
@@ -464,7 +464,7 @@ for(i_species in c("species")){
       obs_dt[,year := year-1,]
       env_dt <- env_dt[year != 0]
       env_dt[,year := as.integer(as.factor(year)),]
-      
+
       fwrite(obs_dt, paste0(out_dir,"/obs_dt.csv"))
       fwrite(env_dt, paste0(out_dir,"/env_dt.csv"))
       #copy init_cohorts
