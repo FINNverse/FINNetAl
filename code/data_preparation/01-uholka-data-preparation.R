@@ -467,6 +467,8 @@ for(i_species in c("species")){
 
       fwrite(obs_dt, paste0(out_dir,"/obs_dt.csv"))
       fwrite(env_dt, paste0(out_dir,"/env_dt.csv"))
+
+      fwrite(species_assigned, paste0(out_dir, "/species_assigned.csv"))
       #copy init_cohorts
       # init_cohort_path =list.files(paste0(out_dir0, "/data-cleaning/", i_species), pattern = "initial_cohorts", full.names = T)
       init_cohort_path =list.files(paste0(out_dir0, "/data-cleaning/", i_species,"/",i_patches), pattern = "initial_cohorts", full.names = T)
