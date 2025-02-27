@@ -12,6 +12,9 @@ m_list = lapply(models, function(x) torch::torch_load(x))
 m_names <- sapply(strsplit(models, "/"), tail, 1)
 names(m_list) <- sapply(strsplit(m_names, "_"), function(x) x[1])
 i=1
+if(!dir.exists("figures")){
+  dir.create("figures")
+}
 pdf("figures/01-results.pdf", width = 10, height = 7)
 for(i in 1:length(m_list)){
   FINN.seed(seed)
@@ -66,36 +69,45 @@ for(i in 1:length(m_list)){
   all_years = unique(pred_dt$year)
   all_obs_years = unique(obs_dt$year)
   period_length = all_obs_years[2]-all_obs_years[1]
-  intervals = rep(unique(obs_dt$year), each = period_length)
-  growth_mort_pred_dt =
-    pred_dt[,.(
-      growth = mean(growth),
-      mort = mean(mort)
-    ), by = .(
-      siteID,
-      year = as.integer(as.character(factor(year, levels = all_years, labels = intervals))),
-      species)]
 
-  df1 = merge.data.table(obs_dt[,-c("growth", "mort")], pred_dt[,-c("growth", "mort")], by = c("siteID", "year", "species"), suffixes = c(".obs", ".pred"))
-  df2 = merge.data.table(obs_dt[,.(siteID, year, species, growth, mort)], growth_mort_pred_dt[,.(siteID, year, species, growth, mort)], by = c("siteID", "year", "species"), suffixes = c(".obs", ".pred"))
-  df = merge.data.table(df1, df2, by = c("siteID", "year", "species"))
-  comp_allspecies_dt <- df[,.(
-    ba.obs = sum(ba.obs)/uniqueN(siteID),
-    ba.pred = sum(ba.pred)/uniqueN(siteID),
-    trees.obs = sum(trees.obs)/uniqueN(siteID),
-    trees.pred = sum(trees.pred)/uniqueN(siteID),
-    dbh.obs = mean(dbh.obs, na.rm = TRUE),
-    dbh.pred = mean(dbh.pred, na.rm = TRUE),
-    reg.obs = mean(reg.obs, na.rm = TRUE),
-    reg.pred = mean(r_mean_ha, na.rm = TRUE),
-    mort.obs = mean(mort.obs, na.rm = TRUE),
-    mort.pred = mean(mort.pred, na.rm = TRUE),
-    growth.obs = mean(growth.obs, na.rm = T),
-    growth.pred = mean(growth.pred, na.rm = T)
-  ), by = .(siteID,year, species)]
+  df = merge.data.table(obs_dt, pred_dt, by = c("siteID", "year", "species"), suffixes = c(".obs", ".pred"))
+  # df2 = merge.data.table(obs_dt[,.(siteID, year, species, growth, mort)], growth_mort_pred_dt[,.(siteID, year, species, growth, mort)], by = c("siteID", "year", "species"), suffixes = c(".obs", ".pred"))
+  # df = merge.data.table(df1, df2, by = c("siteID", "year", "species"))
+  if(grepl("25patches", i_name)){
+    comp_allspecies_dt <- df[,.(
+      ba.obs = sum(ba.obs)/uniqueN(siteID),
+      ba.pred = sum(ba.pred)/uniqueN(siteID),
+      trees.obs = sum(trees.obs)/uniqueN(siteID),
+      trees.pred = sum(trees.pred)/uniqueN(siteID),
+      dbh.obs = mean(dbh.obs, na.rm = TRUE),
+      dbh.pred = mean(dbh.pred, na.rm = TRUE),
+      reg.obs = mean(reg.obs, na.rm = TRUE),
+      reg.pred = mean(r_mean_ha, na.rm = TRUE),
+      mort.obs = mean(mort.obs, na.rm = TRUE),
+      mort.pred = mean(mort.pred, na.rm = TRUE),
+      growth.obs = mean(growth.obs, na.rm = T),
+      growth.pred = mean(growth.pred, na.rm = T)
+    ), by = .(siteID, year, species)]
+  } else if(grepl("1patch", i_name)){
+    comp_allspecies_dt <- df[,.(
+      ba.obs = sum(ba.obs)/uniqueN(siteID),
+      ba.pred = sum(ba.pred)/uniqueN(siteID),
+      trees.obs = sum(trees.obs)/uniqueN(siteID),
+      trees.pred = sum(trees.pred)/uniqueN(siteID),
+      dbh.obs = mean(dbh.obs, na.rm = TRUE),
+      dbh.pred = mean(dbh.pred, na.rm = TRUE),
+      reg.obs = mean(reg.obs, na.rm = TRUE),
+      reg.pred = mean(r_mean_ha, na.rm = TRUE),
+      mort.obs = mean(mort.obs, na.rm = TRUE),
+      mort.pred = mean(mort.pred, na.rm = TRUE),
+      growth.obs = mean(growth.obs, na.rm = T),
+      growth.pred = mean(growth.pred, na.rm = T)
+    ), by = .(year, species)]
+  }
 
   par(mfrow = c(2, 3), pty = "s")
   # plot with correlation in title
+  # p_dat2 <- comp_allspecies_dt[species %in% top10_species]
   plot(
     growth.obs~growth.pred, data = comp_allspecies_dt, col = comp_allspecies_dt$species, main = paste0(i_name,"\nCorrelation: ", round(cor(comp_allspecies_dt$growth.obs, comp_allspecies_dt$growth.pred, use = "complete.obs", method = "spearman"), 2)),
     xlim = range(c(comp_allspecies_dt$growth.obs,comp_allspecies_dt$growth.pred), na.rm = T), ylim = range(c(comp_allspecies_dt$growth.obs,comp_allspecies_dt$growth.pred), na.rm = T),
@@ -170,9 +182,9 @@ names(m_list)[m_list == "realdata"] = c(
   "genus-period7-25patches-realdata",
   "genus-period35-1patch-realdata",
   "genus-period35-25patches-realdata"
-  )
+)
 # genus-period7-25patches
-i=7
+i=8
 for(i in 1:length(m_list)){
   FINN.seed(seed)
   i_name = names(m_list)[i]
@@ -207,9 +219,9 @@ for(i in 1:length(m_list)){
   years <- c(1990, 1995, 2000, 2005, 2010, 2015)
   if(grepl("period7", i_name)){
     all_years = seq(1985,2015, 5)
-    }else{
+  }else{
     all_years = 1985:2015
-    }
+  }
   obs_dt_idx = seq(min(obs_dt$year), max(obs_dt$year), by = max(obs_dt$period_length, na.rm = T))
   env_dt_idx = seq(min(env_dt$year), max(env_dt$year), by = 1)
   temporal_folds_list <- list(
@@ -221,21 +233,21 @@ for(i in 1:length(m_list)){
   k = 1
   holdout = "train"
   for(k in 1:length(temporal_folds_list)){
-      for(holdout in c("test", "train")){
-        init_year = years[temporal_folds_list[[k]][[holdout]][1]]-5
-        env_start = which(init_year == all_years)
-        if(grepl("period7", i_name)) env_start = env_start+1
-        temporal_folds_dt = rbind(
-          temporal_folds_dt,
-          data.table(
-            splitID = k,
-            start = years[temporal_folds_list[[k]][[holdout]][1]], end = years[temporal_folds_list[[k]][[holdout]][2]],
-            obs_start = obs_dt_idx[temporal_folds_list[[k]][[holdout]][1]], obs_end = obs_dt_idx[temporal_folds_list[[k]][[holdout]][2]],
-            env_start = env_start, env_end = env_dt_idx[temporal_folds_list[[k]][[holdout]][2]*period_length],
-            init_year = init_year, holdout = holdout
-            )
+    for(holdout in c("test", "train")){
+      init_year = years[temporal_folds_list[[k]][[holdout]][1]]-5
+      env_start = which(init_year == all_years)
+      # if(grepl("period7", i_name)) env_start = env_start+1
+      temporal_folds_dt = rbind(
+        temporal_folds_dt,
+        data.table(
+          splitID = k,
+          start = years[temporal_folds_list[[k]][[holdout]][1]], end = years[temporal_folds_list[[k]][[holdout]][2]],
+          obs_start = obs_dt_idx[temporal_folds_list[[k]][[holdout]][1]], obs_end = obs_dt_idx[temporal_folds_list[[k]][[holdout]][2]],
+          env_start = env_start, env_end = env_dt_idx[temporal_folds_list[[k]][[holdout]][2]*period_length],
+          init_year = init_year, holdout = holdout
         )
-      }
+      )
+    }
   }
 
   # read spatial holdouts

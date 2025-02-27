@@ -5,3 +5,6 @@
 .DS_Store
 
 *.zip
+/data/BCI/data-cleaning
+/figures
+/data/Uholka/data-cleaning

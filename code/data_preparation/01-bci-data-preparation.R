@@ -11,7 +11,7 @@ if(!dir.exists(out_dir0)) {
     dir.create(out_dir0,recursive = T)
   }
 
-source("code/data_preparation/data-prep-functions.R")
+source("code/data_preparation/bci-data-prep-functions.R")
 dbh_cmTOba_m2 <- function(dbh) {
   dbh = dbh/100
   return(pi*dbh^2/4)
