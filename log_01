@@ -1,0 +1,27 @@
+[[1]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[2]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[3]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[4]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+Error in checkForRemoteErrors(val) : 
+  one node produced an error: CUDA out of memory. Tried to allocate 504.00 MiB. GPU 0 has a total capacity of 23.67 GiB of which 419.12 MiB is free. Including non-PyTorch memory, this process has 23.26 GiB memory in use. Of the allocated memory 12.61 GiB is allocated by PyTorch, and 10.40 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)
+Exception raised from malloc at ../c10/cuda/CUDACachingAllocator.cpp:1318 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xb0 (0x7f61d9b73950 in /home/maxpichler/R/x86_64-pc-linux-gnu-library/4.2/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x4366b (0x7f61d99dd66b in /home/maxpichler/R/x86_64-pc-l
+Calls: <Anonymous> ... clusterApply -> staticClusterApply -> checkForRemoteErrors
+Execution halted

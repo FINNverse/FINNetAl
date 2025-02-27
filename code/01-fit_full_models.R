@@ -5,9 +5,9 @@ library(glmmTMB)
 library(parallel)
 
 # adjust Epochs for 1 patch and 25 patches + 7 epochs and 35 epochs
-Nepochs_vec = c(2000L, 2000L, 2000L, 2000L, 2000L, 2000L, 2000L, 2000L)*0.5
+Nepochs_vec = c(2000L, 2000L, 2000L, 2000L, 2000L, 2000L, 2000L, 2000L)
 
-batchsize_vec = c(10L, 10L, 10L, 10L, 50L, 50L, 50L, 50L)
+batchsize_vec = c(10L, 10L, 10L, 10L, 80L, 80L, 80L, 80L)
 
 paths = c(
   "data/BCI/noSplits/pft-period35-25patches",
