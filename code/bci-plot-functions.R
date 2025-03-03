@@ -1,6 +1,7 @@
 plot_simulated_data <- function(models,
                                 seed     = 123,
-                                pdf_path = "figures/01-results.pdf") {
+                                pdf_path = "figures/01-results.pdf",
+                                dataset = "BCI") {
   # Load required packages
   library(data.table)
   library(ggplot2)
@@ -83,9 +84,9 @@ plot_simulated_data <- function(models,
     }
 
     # Read data
-    obs_dt     <- fread(paste0("data/BCI/noSplits/", i_name, "/obs_dt.csv"))
-    env_dt     <- fread(paste0("data/BCI/noSplits/", i_name, "/env_dt.csv"))
-    cohorts_dt <- fread(paste0("data/BCI/noSplits/", i_name, "/initial_cohorts1985.csv"))
+    obs_dt     <- fread(paste0("data/",dataset,"/noSplits/", i_name, "/obs_dt.csv"))
+    env_dt     <- fread(paste0("data/",dataset,"/noSplits/", i_name, "/env_dt.csv"))
+    cohorts_dt <- fread(paste0("data/",dataset,"/noSplits/", i_name, "/initial_cohorts1985.csv"))
 
     # Predict using the model
     cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = uniqueN(obs_dt$species))

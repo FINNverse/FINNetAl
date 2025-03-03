@@ -1,4 +1,4 @@
-models <- list.files("results/01_full/", full.names = T)
+models <- list.files("results/01_full/", full.names = T, pattern = "(?:pft|genus)")
 # models <- list.files("results/01_full/", pattern = "01", full.names = T)
 m_list = lapply(models, function(x) torch::torch_load(x))
 m_names <- sapply(strsplit(models, "/"), tail, 1)
@@ -16,13 +16,13 @@ out = plot_simulated_data(models, seed = 123, pdf_path = "figures/01-results.pdf
 m_list = c(m_list, rep("realdata",8))
 names(m_list)[m_list == "realdata"] = c(
   "pft-period7-1patch-realdata",
-  "pft-period7-25patches-realdata",
-  "pft-period35-1patch-realdata",
-  "pft-period35-25patches-realdata",
-  "genus-period7-1patch-realdata",
-  "genus-period7-25patches-realdata",
-  "genus-period35-1patch-realdata",
-  "genus-period35-25patches-realdata"
+  "pft-period7-25patches-realdata"
+  # "pft-period35-1patch-realdata",
+  # "pft-period35-25patches-realdata",
+  # "genus-period7-1patch-realdata",
+  # "genus-period7-25patches-realdata",
+  # "genus-period35-1patch-realdata",
+  # "genus-period35-25patches-realdata"
 )
 # genus-period7-25patches
 

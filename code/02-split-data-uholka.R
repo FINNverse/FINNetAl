@@ -15,7 +15,7 @@ i=1
 source("code/bci-plot-functions.R")
 # --- Example usage ---
 # > models <- list.files("results/01_full/", full.names = TRUE)
-out = plot_simulated_data(models, seed = 123, pdf_path = "figures/01-results.pdf")
+out = plot_simulated_data(models, seed = 123, pdf_path = "figures/01-results_uholka.pdf", dataset = "Uholka")
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 # make splits ####
@@ -25,14 +25,10 @@ i = 1
 # i_name = "pft-period3-9patches"
 m_list = c(m_list, rep("realdata",8))
 names(m_list)[m_list == "realdata"] = c(
-  "pft-period3-1patch-realdata",
-  "pft-period3-9patches-realdata",
-  "pft-period15-1patch-realdata",
-  "pft-period15-9patches-realdata",
-  "genus-period3-1patch-realdata",
-  "genus-period3-9patches-realdata",
-  "genus-period15-1patch-realdata",
-  "genus-period15-9patches-realdata"
+  "species-period3-1patch-realdata",
+  "species-period3-9patches-realdata",
+  "species-period15-1patch-realdata",
+  "species-period15-9patches-realdata"
 )
 # genus-period3-9patches
 i=8
