@@ -1,4 +1,3 @@
-
 library(data.table)
 library(FINN)
 library(torch)
@@ -6,21 +5,8 @@ library(glmmTMB)
 library(parallel)
 
 Nepochs = 2
-# timestamp_dt <- fread("input-timestamp.csv")
-# timestamp_dt <- NULL
-# timestamp <- timestamp_dt$timestamp
 
-lossvars_rates <- c("growth", "mort", "reg")
-# All combinations of 1, 2, or 3 elements from lossvars_rates:
-combo_rates <- unlist(lapply(1:length(lossvars_rates), function(n) apply(combn(lossvars_rates, n), 2, paste, collapse=".")))
-lossvars_comb <- c(paste("ba.trees.dbh", combo_rates, sep="."),
-                   "ba.growth.mort.reg", "ba.trees.dbh.growth.mort.reg",
-                   lossvars_rates,
-                   "ba",
-                   "ba.trees.dbh"
-                   )
-lossvars_comb <- lossvars_comb[grepl("ba", lossvars_comb) | grepl("trees.dbh", lossvars_comb)]
-lossvars_comb
+lossvars_comb = "ba.trees.dbh.growth.mort.reg"
 
 T_folds <- paste0("T",c(0, 1:2))
 S_folds <- paste0("S", c(0, 1:5))
@@ -29,6 +15,7 @@ fold_names = paste0(fold_names$Var1, "_", fold_names$Var2)
 cv_variants <- paste0(rep(fold_names,each = length(unlist(lossvars_comb))),"_",unlist(lossvars_comb))
 
 directories <- list.files("data/BCI/CVsplits-simdata", full.names = T)
+
 directories <- directories[grepl("pft", directories)]
 
 cl = parallel::makeCluster(8L)
