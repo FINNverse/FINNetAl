@@ -144,7 +144,7 @@ plot_simulated_data <- function(models,
                            suffixes = c(".obs", ".pred"))
 
     # Summarize across siteIDs if needed
-    if (grepl("25patches", i_name)) {
+    if (grepl("25patches", i_name) | grepl("species", i_name)) {
       comp_allspecies_dt <- df[
         ,
         .(
