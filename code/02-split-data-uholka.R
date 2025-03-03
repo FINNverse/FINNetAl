@@ -1,21 +1,21 @@
-#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-# plot simulated data ####
-#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 library(data.table)
 library(ggplot2)
 library(FINN)
-seed = 123
 
-models <- list.files("results/01_full/", full.names = T)
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+# plot simulated data ####
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+seed = 123
+models <- list.files("results/01_full", full.names = T, pattern = "species")
 # models <- list.files("results/01_full/", pattern = "01", full.names = T)
 m_list = lapply(models, function(x) torch::torch_load(x))
 m_names <- sapply(strsplit(models, "/"), tail, 1)
 names(m_list) <- sapply(strsplit(m_names, "_"), function(x) x[1])
 i=1
-source("code/bci-plot-functions.R")
+source("code/plot-functions.R")
 # --- Example usage ---
 # > models <- list.files("results/01_full/", full.names = TRUE)
-out = plot_simulated_data(models, seed = 123, pdf_path = "figures/01-results_uholka.pdf", dataset = "Uholka")
+out = plot_simulated_data(models = models, seed = seed, pdf_path = "figures/01-results_uholka.pdf", dataset = "Uholka")
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 # make splits ####
@@ -46,7 +46,7 @@ for(i in 1:length(m_list)){
   # read full raw data
   obs_dt = fread(paste0("data/Uholka/noSplits/", i_folder,"/obs_dt.csv"))
   env_dt = fread(paste0("data/Uholka/noSplits/", i_folder,"/env_dt.csv"))
-  cohorts_dt = fread(paste0("data/Uholka/noSplits/", i_folder,"/initial_cohorts1985.csv"))
+  cohorts_dt = fread(paste0("data/Uholka/noSplits/", i_folder,"/initial_cohorts2000.csv"))
 
   # simulate or assign realdata
   if(!grepl("realdata", i_name)){
@@ -63,17 +63,17 @@ for(i in 1:length(m_list)){
   }
 
   # create temporal folds
-  years <- c(1990, 1995, 2000, 2005, 2010, 2015)
+  years <- c(2005, 2010, 2015)
   if(grepl("period3", i_name)){
-    all_years = seq(1985,2015, 5)
+    all_years = seq(2000,2015, 5)
   }else{
-    all_years = 1985:2015
+    all_years = 2000:2015
   }
   obs_dt_idx = seq(min(obs_dt$year), max(obs_dt$year), by = max(obs_dt$period_length, na.rm = T))
   env_dt_idx = seq(min(env_dt$year), max(env_dt$year), by = 1)
   temporal_folds_list <- list(
-    list(test = c(1,2), train = c(3,6)),
-    list(test = c(5,6), train = c(1,4))
+    list(test = c(1,2), train = c(2,3)),
+    list(test = c(2,3), train = c(1,2))
   )
 
   temporal_folds_dt = data.table()
@@ -112,8 +112,8 @@ for(i in 1:length(m_list)){
     for(i_S in c(0, spatial_splits)){
       # define years of initial cohorts for train and test
       if(i_T == 0){
-        train_cohort_init_year = 1985
-        test_cohort_init_year = 1985
+        train_cohort_init_year = 2000
+        test_cohort_init_year = 2000
         train_years_obs = seq(min(temporal_folds_dt$obs_start), max(temporal_folds_dt$obs_end), period_length)
         test_years_obs = seq(min(temporal_folds_dt$obs_start), max(temporal_folds_dt$obs_end), period_length)
         train_years_env = seq(min(temporal_folds_dt$env_start), max(temporal_folds_dt$env_end), 1)
@@ -189,6 +189,7 @@ for(i in 1:length(m_list)){
       fwrite(init_cohort_train, paste0(out_dir0, i_folder, "/initial_cohorts_", cv_label, "_train.csv"))
     }
   }
+  cat("\n", i, "of", length(m_list), "models simulated")
 }
 
 

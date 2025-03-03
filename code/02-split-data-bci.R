@@ -1,12 +1,20 @@
+library(data.table)
+library(FINN)
+library(torch)
+
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+# plot simulated data ####
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+seed = 123
+
 models <- list.files("results/01_full/", full.names = T, pattern = "(?:pft|genus)")
 # models <- list.files("results/01_full/", pattern = "01", full.names = T)
 m_list = lapply(models, function(x) torch::torch_load(x))
 m_names <- sapply(strsplit(models, "/"), tail, 1)
 names(m_list) <- sapply(strsplit(m_names, "_"), function(x) x[1])
 i=1
-source("code/bci-plot-functions.R")
-
-out = plot_simulated_data(models, seed = 123, pdf_path = "figures/01-results.pdf")
+source("code/plot-functions.R")
+out = plot_simulated_data(models, seed = seed, pdf_path = "figures/01-results_bci.pdf", dataset = "BCI")
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 # make splits ####

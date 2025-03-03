@@ -1,7 +1,8 @@
 plot_simulated_data <- function(models,
                                 seed     = 123,
-                                pdf_path = "figures/01-results.pdf",
-                                dataset = "BCI") {
+                                pdf_path,
+                                dataset) {
+
   # Load required packages
   library(data.table)
   library(ggplot2)
@@ -67,26 +68,22 @@ plot_simulated_data <- function(models,
   pdf(pdf_path, width = 10, height = 7)
 
   # Process each model
+  i=1
   for (i in seq_along(m_list)) {
     FINN.seed(seed)
 
     i_name <- names(m_list)[i]
     m      <- m_list[[i]]
 
-    # Figure out number of patches
-    if (grepl("1patch$", i_name)) {
-      Npatches <- 1L
-    } else if (grepl("25patches$", i_name)) {
-      Npatches <- 25L
-    } else {
-      # fallback
-      Npatches <- 1L
-    }
+    # extract number from 1patch or 4patches or 3patch
+    Npatches = as.integer(gsub("\\D", "", tstrsplit(i_name, "-")[[3]]))
 
     # Read data
     obs_dt     <- fread(paste0("data/",dataset,"/noSplits/", i_name, "/obs_dt.csv"))
     env_dt     <- fread(paste0("data/",dataset,"/noSplits/", i_name, "/env_dt.csv"))
-    cohorts_dt <- fread(paste0("data/",dataset,"/noSplits/", i_name, "/initial_cohorts1985.csv"))
+    inicohort_files = list.files(paste0("data/",dataset,"/noSplits/", i_name), pattern = "initial_cohorts")
+    initcohort_year = min(as.integer(gsub("\\D", "", inicohort_files)))
+    cohorts_dt <- fread(paste0("data/",dataset,"/noSplits/", i_name, "/initial_cohorts",initcohort_year,".csv"))
 
     # Predict using the model
     cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = uniqueN(obs_dt$species))
