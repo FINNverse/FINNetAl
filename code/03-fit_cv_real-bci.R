@@ -5,8 +5,9 @@ library(glmmTMB)
 library(parallel)
 
 logfile <- "log_03-fit_cv_real-bci.txt"
+if(file.exists(logfile)) file.remove(logfile)
 
-Nepochs = 2
+Nepochs = 5
 
 lossvars_comb = "ba.trees.dbh.growth.mort.reg"
 all_lossvars = c("ba", "trees", "dbh", "growth", "mort", "reg")
@@ -21,7 +22,7 @@ directories <- list.files("data/BCI/CVsplits-realdata", full.names = T)
 
 directories <- directories[grepl("pft", directories)]
 
-cl = parallel::makeCluster(8L)
+cl = parallel::makeCluster(12L)
 nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
 parallel::clusterEvalQ(cl, {
@@ -140,10 +141,11 @@ for(i_dir in directories){
       if(!dir.exists(dirname(out_dir))) dir.create(dirname(out_dir), recursive = T)
       torch::torch_save(m1, out_dir)
 
+      cat(paste("Finished", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
       rm(m1)
       gc()
       torch::cuda_empty_cache()
-      cat(paste("Finished", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
   })
   # }
 }
+parallel::stopCluster(cl)
