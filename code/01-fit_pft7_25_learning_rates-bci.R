@@ -84,6 +84,13 @@ res = parallel::parLapply(cl, 1:length(lrs), function(i) {
       init_reg_env[is.na(init_reg_env)] = 0
     }
 
+    init_growth_env[init_growth_env > 5] = 5
+    init_growth_env[init_growth_env < -5] = -5
+    init_mort_env[init_mort_env > 5] = 5
+    init_mort_env[init_mort_env < -5] = -5
+    init_reg_env[init_reg_env > 5] = 5
+    init_reg_env[init_reg_env < -5] = -5
+
     m1 = finn(
       N_species = Nspecies,
       competition_process = createProcess(~0, func = FINN::competition, optimizeSpecies = TRUE),

@@ -110,6 +110,12 @@ for(i_dir in directories){
       init_reg_env = matrix(summary(reg_init_model)$coefficients$cond[,1], Nspecies, Nenv+1)
       init_reg_env[is.na(init_reg_env)] = 0
     }
+    init_growth_env[init_growth_env > 5] = 5
+    init_growth_env[init_growth_env < -5] = -5
+    init_mort_env[init_mort_env > 5] = 5
+    init_mort_env[init_mort_env < -5] = -5
+    init_reg_env[init_reg_env > 5] = 5
+    init_reg_env[init_reg_env < -5] = -5
 
 
     obsNA = unlist(strsplit(response, ".", fixed = TRUE))
