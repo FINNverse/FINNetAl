@@ -8,14 +8,12 @@ library(parallel)
 Nepochs_vec = 8000L
 
 batchsize_vec = c(10L, 90L, 10L, 90L)
-
 paths = c(
   "data/Uholka/noSplits/species-period3-9patches/",
   "data/Uholka/noSplits/species-period3-1patch/",
   "data/Uholka/noSplits/species-period15-9patches/",
   "data/Uholka/noSplits/species-period15-1patch/"
 )
-
 
 cl = parallel::makeCluster(4L)
 nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
@@ -27,6 +25,7 @@ parallel::clusterEvalQ(cl, {
   library(glmmTMB)
 })
 i=3
+
 res = parallel::parLapply(cl, 1:length(paths), function(i) {
 
   myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
@@ -86,8 +85,8 @@ res = parallel::parLapply(cl, 1:length(paths), function(i) {
          loss= c(dbh = "mse", ba = "mse", trees = "nbinom", growth = "mse", mortality = "mse", regeneration = "nbinom")
   )
 
-  if(!dir.exists(("results/01_full/"))) dir.create("results/01_full/", recursive = T)
-  torch::torch_save(m1, path = paste0("results/01_full/",basename(p), "_full.pt"))
+  if(!dir.exists(("results/Uholka/01_full/"))) dir.create("results/Uholka/01_full/", recursive = T)
+  torch::torch_save(m1, path = paste0("results/Uholka/01_full/",basename(p), "_full.pt"))
 
   rm(m1)
   gc()

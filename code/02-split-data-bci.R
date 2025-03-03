@@ -1,175 +1,16 @@
-#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-# plot simulated data ####
-#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-library(data.table)
-library(ggplot2)
-library(FINN)
-seed = 123
-
 models <- list.files("results/01_full/", full.names = T)
 # models <- list.files("results/01_full/", pattern = "01", full.names = T)
 m_list = lapply(models, function(x) torch::torch_load(x))
 m_names <- sapply(strsplit(models, "/"), tail, 1)
 names(m_list) <- sapply(strsplit(m_names, "_"), function(x) x[1])
 i=1
-if(!dir.exists("figures")){
-  dir.create("figures")
-}
-pdf("figures/01-results.pdf", width = 10, height = 7)
-for(i in 1:length(m_list)){
-  FINN.seed(seed)
+source("code/bci-plot-functions.R")
 
-  i_name = names(m_list)[i]
-  m = m_list[[i]]
-  if(grepl("1patch$", i_name)){
-    Npatches = 1L
-  } else if(grepl("25patches$", i_name)){
-    Npatches = 25L
-  }
-
-  # read full raw data
-  obs_dt = fread(paste0("data/BCI/noSplits/", i_name,"/obs_dt.csv"))
-  env_dt = fread(paste0("data/BCI/noSplits/", i_name,"/env_dt.csv"))
-  cohorts_dt = fread(paste0("data/BCI/noSplits/", i_name,"/initial_cohorts1985.csv"))
-
-  # predict for model
-  cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = uniqueN(obs_dt$species))
-  pred = m$simulate(env = env_dt, init_cohort = cohort1, patches = Npatches)
-  pred_dt = pred$wide$site
-  pred_dt$pred = "pred"
-  pred_dt[,reg := reg/0.1,] # correct regeneration response
-  obs_dt$pred = "obs"
-
-  # create comparison data
-  comp_dt1 = rbind(pred_dt, obs_dt, fill = T)
-  comp_dt1 <- rbind(comp_dt1, comp_dt1[, .(
-    species = "all",
-    dbh = mean(dbh, na.rm = T),
-    ba = sum(ba),
-    trees = sum(trees),
-    reg = mean(reg, na.rm = T),
-    mort = mean(mort, na.rm = T),
-    growth = mean(growth, na.rm = T)
-  ) , by = .(siteID, year, pred, period_length)], fill = T)
-
-  # pick 10 most abundant species for plotting
-  top10_species = obs_dt[,.(ba = sum(ba)),by=species][order(ba, decreasing = T)]$species[1:(min(c(10, uniqueN(obs_dt$species))))]
-  comp_dt1 = comp_dt1[species %in% c(top10_species, "all")]
-  melt_dt = melt(comp_dt1, id.vars = c("siteID", "year", "species", "pred", "period_length"), variable.name = "variable")
-  p_dat = melt_dt[,.(value = mean(value)), by = .(species,year, pred,variable)]
-  p1 = ggplot(p_dat[variable != "r_mean_ha"],
-              aes(x = year, y = value, color = factor(species)))+
-    geom_point(aes(shape = pred, size = pred))+
-    geom_line(aes(linetype = pred))+
-    scale_size_manual(values = c(pred = 2, obs = 3))+
-    facet_wrap(~variable, scales = "free_y")+
-    ggtitle(i_name)
-  print(p1)
-
-  all_years = unique(pred_dt$year)
-  all_obs_years = unique(obs_dt$year)
-  period_length = all_obs_years[2]-all_obs_years[1]
-
-  df = merge.data.table(obs_dt, pred_dt, by = c("siteID", "year", "species"), suffixes = c(".obs", ".pred"))
-  # df2 = merge.data.table(obs_dt[,.(siteID, year, species, growth, mort)], growth_mort_pred_dt[,.(siteID, year, species, growth, mort)], by = c("siteID", "year", "species"), suffixes = c(".obs", ".pred"))
-  # df = merge.data.table(df1, df2, by = c("siteID", "year", "species"))
-  if(grepl("25patches", i_name)){
-    comp_allspecies_dt <- df[,.(
-      ba.obs = sum(ba.obs)/uniqueN(siteID),
-      ba.pred = sum(ba.pred)/uniqueN(siteID),
-      trees.obs = sum(trees.obs)/uniqueN(siteID),
-      trees.pred = sum(trees.pred)/uniqueN(siteID),
-      dbh.obs = mean(dbh.obs, na.rm = TRUE),
-      dbh.pred = mean(dbh.pred, na.rm = TRUE),
-      reg.obs = mean(reg.obs, na.rm = TRUE),
-      reg.pred = mean(r_mean_ha, na.rm = TRUE),
-      mort.obs = mean(mort.obs, na.rm = TRUE),
-      mort.pred = mean(mort.pred, na.rm = TRUE),
-      growth.obs = mean(growth.obs, na.rm = T),
-      growth.pred = mean(growth.pred, na.rm = T)
-    ), by = .(siteID, year, species)]
-  } else if(grepl("1patch", i_name)){
-    comp_allspecies_dt <- df[,.(
-      ba.obs = sum(ba.obs)/uniqueN(siteID),
-      ba.pred = sum(ba.pred)/uniqueN(siteID),
-      trees.obs = sum(trees.obs)/uniqueN(siteID),
-      trees.pred = sum(trees.pred)/uniqueN(siteID),
-      dbh.obs = mean(dbh.obs, na.rm = TRUE),
-      dbh.pred = mean(dbh.pred, na.rm = TRUE),
-      reg.obs = mean(reg.obs, na.rm = TRUE),
-      reg.pred = mean(r_mean_ha, na.rm = TRUE),
-      mort.obs = mean(mort.obs, na.rm = TRUE),
-      mort.pred = mean(mort.pred, na.rm = TRUE),
-      growth.obs = mean(growth.obs, na.rm = T),
-      growth.pred = mean(growth.pred, na.rm = T)
-    ), by = .(year, species)]
-  }
-
-  par(mfrow = c(2, 3), pty = "s")
-  # plot with correlation in title
-  # p_dat2 <- comp_allspecies_dt[species %in% top10_species]
-  plot(
-    growth.obs~growth.pred, data = comp_allspecies_dt, col = comp_allspecies_dt$species, main = paste0(i_name,"\nCorrelation: ", round(cor(comp_allspecies_dt$growth.obs, comp_allspecies_dt$growth.pred, use = "complete.obs", method = "spearman"), 2)),
-    xlim = range(c(comp_allspecies_dt$growth.obs,comp_allspecies_dt$growth.pred), na.rm = T), ylim = range(c(comp_allspecies_dt$growth.obs,comp_allspecies_dt$growth.pred), na.rm = T),
-    asp = 1)
-  abline(0, 1)
-  plot(
-    reg.obs~reg.pred, data = comp_allspecies_dt, col = comp_allspecies_dt$species, main = paste0(i_name,"\nCorrelation: ", round(cor(comp_allspecies_dt$reg.obs, comp_allspecies_dt$reg.pred, use = "complete.obs", method = "spearman"), 2)),
-    xlim = range(c(comp_allspecies_dt$reg.obs,comp_allspecies_dt$reg.pred), na.rm = T), ylim = range(c(comp_allspecies_dt$reg.obs,comp_allspecies_dt$reg.pred), na.rm = T),
-    asp = 1)
-  abline(0, 1)
-  plot(
-    mort.obs~mort.pred, data = comp_allspecies_dt, col = comp_allspecies_dt$species, main = paste0(i_name,"\nCorrelation: ", round(cor(comp_allspecies_dt$mort.obs, comp_allspecies_dt$mort.pred, use = "complete.obs", method = "spearman"), 2)),
-    xlim = range(c(comp_allspecies_dt$mort.obs,comp_allspecies_dt$mort.pred), na.rm = T), ylim = range(c(comp_allspecies_dt$mort.obs,comp_allspecies_dt$mort.pred), na.rm = T),
-    asp = 1)
-  abline(0, 1)
-  plot(
-    ba.obs~ba.pred, data = comp_allspecies_dt, col = comp_allspecies_dt$species, main = paste0(i_name,"\nCorrelation: ", round(cor(comp_allspecies_dt$ba.obs, comp_allspecies_dt$ba.pred, use = "complete.obs", method = "spearman"), 2)),
-    xlim = range(c(comp_allspecies_dt$ba.obs,comp_allspecies_dt$ba.pred), na.rm = T), ylim = range(c(comp_allspecies_dt$ba.obs,comp_allspecies_dt$ba.pred), na.rm = T),
-    asp = 1)
-  abline(0, 1)
-  plot(
-    trees.obs~trees.pred, data = comp_allspecies_dt, col = comp_allspecies_dt$species, main = paste0(i_name,"\nCorrelation: ", round(cor(comp_allspecies_dt$trees.obs, comp_allspecies_dt$trees.pred, use = "complete.obs", method = "spearman"), 2)),
-    xlim = range(c(comp_allspecies_dt$trees.obs,comp_allspecies_dt$trees.pred), na.rm = T), ylim = range(c(comp_allspecies_dt$trees.obs,comp_allspecies_dt$trees.pred), na.rm = T),
-    asp = 1)
-  abline(0, 1)
-  plot(
-    dbh.obs~dbh.pred, data = comp_allspecies_dt, col = comp_allspecies_dt$species, main = paste0(i_name,"\nCorrelation: ", round(cor(comp_allspecies_dt$dbh.obs, comp_allspecies_dt$dbh.pred, use = "complete.obs", method = "spearman"), 2)),
-    xlim = range(c(comp_allspecies_dt$dbh.obs,comp_allspecies_dt$dbh.pred), na.rm = T), ylim = range(c(comp_allspecies_dt$dbh.obs,comp_allspecies_dt$dbh.pred), na.rm = T),
-    asp = 1)
-  abline(0, 1)
-  # same plots with ranges
-  par(mfrow = c(2, 3))
-  # plot with correlation in title
-  plot(
-    growth.obs~growth.pred, data = comp_allspecies_dt, col = comp_allspecies_dt$species, main = paste0(i_name,"\nCorrelation: ", round(cor(comp_allspecies_dt$growth.obs, comp_allspecies_dt$growth.pred, use = "complete.obs", method = "spearman"), 2))
-    ,xlim = range(comp_allspecies_dt$growth.obs, na.rm = T), ylim = range(comp_allspecies_dt$growth.obs, na.rm = T))
-  abline(0, 1)
-  plot(
-    reg.obs~reg.pred, data = comp_allspecies_dt, col = comp_allspecies_dt$species, main = paste0(i_name,"\nCorrelation: ", round(cor(comp_allspecies_dt$reg.obs, comp_allspecies_dt$reg.pred, use = "complete.obs", method = "spearman"), 2))
-    ,xlim = range(comp_allspecies_dt$reg.obs, na.rm = T), ylim = range(comp_allspecies_dt$reg.obs, na.rm = T))
-  abline(0, 1)
-  plot(
-    mort.obs~mort.pred, data = comp_allspecies_dt, col = comp_allspecies_dt$species, main = paste0(i_name,"\nCorrelation: ", round(cor(comp_allspecies_dt$mort.obs, comp_allspecies_dt$mort.pred, use = "complete.obs", method = "spearman"), 2))
-    , xlim = range(comp_allspecies_dt$mort.obs, na.rm = T), ylim = range(comp_allspecies_dt$mort.obs, na.rm = T))
-  abline(0, 1)
-  plot(ba.obs~ba.pred, data = comp_allspecies_dt, col = comp_allspecies_dt$species, main = paste0(i_name,"\nCorrelation: ", round(cor(comp_allspecies_dt$ba.obs, comp_allspecies_dt$ba.pred, use = "complete.obs", method = "spearman"), 2))
-       , xlim = range(comp_allspecies_dt$ba.obs, na.rm = T), ylim = range(comp_allspecies_dt$ba.obs, na.rm = T))
-  abline(0, 1)
-  plot(trees.obs~trees.pred, data = comp_allspecies_dt, col = comp_allspecies_dt$species, main = paste0(i_name,"\nCorrelation: ", round(cor(comp_allspecies_dt$trees.obs, comp_allspecies_dt$trees.pred, use = "complete.obs", method = "spearman"), 2)),
-       xlim = range(comp_allspecies_dt$trees.obs, na.rm = T), ylim = range(comp_allspecies_dt$trees.obs, na.rm = T))
-  abline(0, 1)
-  plot(dbh.obs~dbh.pred, data = comp_allspecies_dt, col = comp_allspecies_dt$species, main = paste0(i_name,"\nCorrelation: ", round(cor(comp_allspecies_dt$dbh.obs, comp_allspecies_dt$dbh.pred, use = "complete.obs", method = "spearman"), 2)),
-       xlim = range(comp_allspecies_dt$dbh.obs, na.rm = T), ylim = range(comp_allspecies_dt$dbh.obs, na.rm = T))
-  abline(0, 1)
-}
-dev.off()
-
+out = plot_simulated_data(models, seed = 123, pdf_path = "figures/01-results.pdf")
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 # make splits ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-i = 1
 # "pft-period7-25patches_S1_T0"
 # i_name = "pft-period7-25patches"
 m_list = c(m_list, rep("realdata",8))
@@ -184,7 +25,7 @@ names(m_list)[m_list == "realdata"] = c(
   "genus-period35-25patches-realdata"
 )
 # genus-period7-25patches
-i=8
+
 for(i in 1:length(m_list)){
   FINN.seed(seed)
   i_name = names(m_list)[i]
@@ -342,6 +183,7 @@ for(i in 1:length(m_list)){
       fwrite(init_cohort_train, paste0(out_dir0, i_folder, "/initial_cohorts_", cv_label, "_train.csv"))
     }
   }
+  cat("\n", i, "of", length(m_list), "models simulated")
 }
 
 
