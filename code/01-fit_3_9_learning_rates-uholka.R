@@ -5,18 +5,18 @@ library(glmmTMB)
 library(parallel)
 
 # adjust Epochs for 1 patch and 25 patches + 7 epochs and 35 epochs
-Nepochs_vec = 8000L
+Nepochs_vec = 10000
 
-batchsize_vec = c(10L, 90L, 10L, 90L)
+batchsize_vec = 10L
+
+lrs = c(0.1, 0.05, 0.02, 0.01, 0.005, 0.001)
 
 paths = c(
-  "data/Uholka/noSplits/species-period3-9patches/",
-  "data/Uholka/noSplits/species-period3-1patch/",
-  "data/Uholka/noSplits/species-period15-9patches/",
-  "data/Uholka/noSplits/species-period15-1patch/"
+  "data/Uholka/noSplits/species-period3-9patches/"
 )
 
-
+#paths = paths[!grepl("genus", paths)]
+#
 cl = parallel::makeCluster(4L)
 nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
@@ -26,17 +26,17 @@ parallel::clusterEvalQ(cl, {
   library(torch)
   library(glmmTMB)
 })
-i=3
-res = parallel::parLapply(cl, 1:length(paths), function(i) {
+res = parallel::parLapply(cl, 1:length(lrs), function(i) {
 
   myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
-  dist = cbind(nodes,0:3)
+  dist = cbind(nodes,3:0)
   dev = as.integer(as.numeric(dist[which(dist[,1] %in% myself, arr.ind = TRUE), 2]))
   Sys.setenv(CUDA_VISIBLE_DEVICES=dev)
 
-  p = paths[i]
+  p = paths
   Nepochs = Nepochs_vec
-  batchsize = batchsize_vec[i]
+  batchsize = batchsize_vec
+  learning_rate = lrs[i]
   Npatches = ifelse(grepl("9patches", p), 9L, 1L)
 
   env_dt = fread(paste0(p, "/env_dt.csv"))
@@ -81,13 +81,12 @@ res = parallel::parLapply(cl, 1:length(paths), function(i) {
     )
 
   cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = Nspecies)
-  m1$fit(data = obs_dt, batchsize = batchsize, env = env_dt, init_cohort = cohort1,  epochs = Nepochs, patches = Npatches, lr = 0.01, checkpoints = 5L,
+  m1$fit(data = obs_dt, batchsize = batchsize, env = env_dt, init_cohort = cohort1,  epochs = Nepochs, patches = Npatches, lr = learning_rate, checkpoints = 5L,
          optimizer = torch::optim_adam, device = "gpu", record_gradients = FALSE,weights = c(0.1, 10, 1.0, 1, 1, 1), plot_progress = FALSE,
          loss= c(dbh = "mse", ba = "mse", trees = "nbinom", growth = "mse", mortality = "mse", regeneration = "nbinom")
   )
 
-  if(!dir.exists(("results/01_full/"))) dir.create("results/01_full/", recursive = T)
-  torch::torch_save(m1, path = paste0("results/01_full/",basename(p), "_full.pt"))
+  torch::torch_save(m1, path = paste0("results/01_learning_rate/",basename(p), "_",learning_rate,".pt"))
 
   rm(m1)
   gc()
