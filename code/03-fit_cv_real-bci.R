@@ -4,10 +4,10 @@ library(torch)
 library(glmmTMB)
 library(parallel)
 
-logfile <- "log_03-fit_cv_real-bci.txt"
-if(file.exists(logfile)) file.remove(logfile)
+# logfile <- "log_03-fit_cv_real-bci.txt"
+# if(file.exists(logfile)) file.remove(logfile)
 
-Nepochs = 5
+Nepochs = 8000
 
 lossvars_comb = "ba.trees.dbh.growth.mort.reg"
 all_lossvars = c("ba", "trees", "dbh", "growth", "mort", "reg")
@@ -32,18 +32,17 @@ parallel::clusterEvalQ(cl, {
   library(glmmTMB)
 })
 
-i_cv = cv_variants[1]
-i_dir = directories[1]
+cat("\nscript finished")
 for(i_dir in directories){
   # for(i_cv in cv_variants){
-  parallel::clusterExport(cl, varlist = list("i_dir", "logfile"))
+  parallel::clusterExport(cl, varlist = list("i_dir"), envir = environment())
   .null = parLapply(cl, cv_variants, function(i_cv){
       cv_S = tstrsplit(i_cv, "_", fixed = TRUE)[[1]][1]
       cv_T = tstrsplit(i_cv, "_", fixed = TRUE)[[2]][1]
       response = tstrsplit(i_cv, "_", fixed = TRUE)[[3]][1]
       i_name = basename(i_dir)
 
-      cat(paste("Starting", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
+      # cat(paste("Starting", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
 
       myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
       dist = cbind(nodes,0:3)
@@ -141,7 +140,7 @@ for(i_dir in directories){
       if(!dir.exists(dirname(out_dir))) dir.create(dirname(out_dir), recursive = T)
       torch::torch_save(m1, out_dir)
 
-      cat(paste("Finished", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
+      #cat(paste("Finished", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
       rm(m1)
       gc()
       torch::cuda_empty_cache()
@@ -149,3 +148,4 @@ for(i_dir in directories){
   # }
 }
 parallel::stopCluster(cl)
+cat("\nscript finished")
