@@ -1,0 +1,20 @@
+[[1]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[2]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[3]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[4]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+

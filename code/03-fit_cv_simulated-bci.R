@@ -1,11 +1,10 @@
-
 library(data.table)
 library(FINN)
 library(torch)
 library(glmmTMB)
 library(parallel)
 
-Nepochs = 2
+Nepochs = 8000L
 # timestamp_dt <- fread("input-timestamp.csv")
 # timestamp_dt <- NULL
 # timestamp <- timestamp_dt$timestamp
@@ -19,6 +18,7 @@ lossvars_comb <- c(paste("ba.trees.dbh", combo_rates, sep="."),
                    "ba",
                    "ba.trees.dbh"
                    )
+all_lossvars = c("ba", "trees", "dbh", "growth", "mort", "reg")
 lossvars_comb <- lossvars_comb[grepl("ba", lossvars_comb) | grepl("trees.dbh", lossvars_comb)]
 lossvars_comb
 
@@ -29,9 +29,9 @@ fold_names = paste0(fold_names$Var1, "_", fold_names$Var2)
 cv_variants <- paste0(rep(fold_names,each = length(unlist(lossvars_comb))),"_",unlist(lossvars_comb))
 
 directories <- list.files("data/BCI/CVsplits-simdata", full.names = T)
-directories <- directories[grepl("pft", directories)]
+directories <- directories[grepl("pft", directories)][c(4, 3, 2, 1)]
 
-cl = parallel::makeCluster(8L)
+cl = parallel::makeCluster(16L)
 nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
 parallel::clusterEvalQ(cl, {
@@ -44,7 +44,7 @@ parallel::clusterEvalQ(cl, {
 i_cv= cv_variants[1]
 i_dir = directories[7]
 for(i_dir in directories){
-  parallel::clusterExport(cl, varlist = list("i_folder"))
+  parallel::clusterExport(cl, varlist = list("i_dir"), envir = environment())
   .null = parLapply(cl, cv_variants, function(i_cv){
     cv_S = tstrsplit(i_cv, "_", fixed = TRUE)[[1]][1]
     cv_T = tstrsplit(i_cv, "_", fixed = TRUE)[[2]][1]
@@ -136,7 +136,7 @@ for(i_dir in directories){
     cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = Nspecies)
 
     Nsites = length(unique(obs_dt$siteID))
-    batchsize = ceiling((Nsites)) # TODO change back
+    batchsize = ceiling((Nsites)/2) # TODO change back
     Npatches = uniqueN(cohorts_dt$patchID)
 
     m1$fit(data = obs_dt, batchsize = batchsize, env = env_dt, init_cohort = cohort1,  epochs = Nepochs, patches = Npatches, lr = 0.01, checkpoints = 5L,
