@@ -1,4 +1,3 @@
-
 library(data.table)
 library(FINN)
 library(torch)
@@ -32,7 +31,7 @@ cv_variants <- paste0(rep(fold_names,each = length(unlist(lossvars_comb))),"_",u
 directories <- list.files("data/Uholka/CVsplits-simdata", full.names = T)
 directories <- rev(directories)
 
-cl = parallel::makeCluster(8L)
+cl = parallel::makeCluster(16L)
 nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
 parallel::clusterEvalQ(cl, {
@@ -45,7 +44,7 @@ parallel::clusterEvalQ(cl, {
 i_cv= cv_variants[1]
 i_dir = directories[1]
 for(i_dir in directories){
-  parallel::clusterExport(cl, varlist = list("i_folder"))
+  parallel::clusterExport(cl, varlist = list("i_dir"), envir = environment())
   .null = parLapply(cl, cv_variants, function(i_cv){
     cv_S = tstrsplit(i_cv, "_", fixed = TRUE)[[1]][1]
     cv_T = tstrsplit(i_cv, "_", fixed = TRUE)[[2]][1]
@@ -54,7 +53,7 @@ for(i_dir in directories){
 
 
     myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
-    dist = cbind(nodes,0:3)
+    dist = cbind(nodes,0:1)
     dev = as.integer(as.numeric(dist[which(dist[,1] %in% myself, arr.ind = TRUE), 2]))
 
     Sys.setenv(CUDA_VISIBLE_DEVICES=dev)
@@ -120,7 +119,7 @@ for(i_dir in directories){
     cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = Nspecies)
 
     Nsites = length(unique(obs_dt$siteID))
-    batchsize = ceiling((Nsites)) # TODO change back
+    batchsize = ceiling((Nsites)/2) # TODO change back
     Npatches = uniqueN(cohorts_dt$patchID)
 
     m1$fit(data = obs_dt, batchsize = batchsize, env = env_dt, init_cohort = cohort1,  epochs = Nepochs, patches = Npatches, lr = 0.01, checkpoints = 5L,
