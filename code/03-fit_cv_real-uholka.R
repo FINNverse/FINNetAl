@@ -126,7 +126,6 @@ for(i_dir in directories){
              loss= c(dbh = "mse", ba = "mse", trees = "nbinom", growth = "mse", mortality = "mse", regeneration = "nbinom")
       )
 
-      out_dir = paste0("results/","02_simulated/",i_name,"_",i_cv,".pt")
       if(!dir.exists(dirname(out_dir))) dir.create(dirname(out_dir), recursive = T)
       torch::torch_save(m1, out_dir)
 
