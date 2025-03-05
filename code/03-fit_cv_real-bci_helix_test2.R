@@ -134,7 +134,7 @@ i_var = all_variants[[1]]
     )
 
     ## fit model ####
-    cat("\create cohorts")
+    cat("\ncreate cohorts")
     cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = Nspecies)
 
     Nsites = length(unique(obs_dt$siteID))
