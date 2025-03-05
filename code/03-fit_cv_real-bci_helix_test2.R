@@ -52,7 +52,7 @@ i_var = all_variants[[1]]
   response = tstrsplit(i_cv, "_", fixed = TRUE)[[3]][1]
   i_name = basename(i_dir)
   out_dir = paste0("results/","02_realdata/",i_name,"_",i_cv,".pt")
-  if(!file.exists(out_dir) | overwrite){
+  # if(!file.exists(out_dir) | overwrite){
 
     # cat(paste("Starting", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
 
@@ -148,15 +148,15 @@ i_var = all_variants[[1]]
     )
 
     cat("\nmodel fitted:", i_name)
-    if(!dir.exists(dirname(out_dir))) dir.create(dirname(out_dir), recursive = T)
+    # if(!dir.exists(dirname(out_dir))) dir.create(dirname(out_dir), recursive = T)
     cat("\nsave model:", i_name)
-    torch::torch_save(m1, out_dir)
+    torch::torch_save(m1, "test")
 
     #cat(paste("Finished", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
     rm(m1)
     gc()
     torch::cuda_empty_cache()
-  }
+  # }
 # })
 # }
 # }
