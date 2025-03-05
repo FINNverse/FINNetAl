@@ -44,7 +44,7 @@ parallel::clusterEvalQ(cl, {
 })
 i_var = all_variants[[1]]
 cat("\nStarting parallel")
-parallel::clusterExport(cl, envir = environment())
+parallel::clusterExport(cl, varlist = list("overwrite"), envir = environment())
 .null = parLapply(cl, all_variants, function(i_var){
     i_dir = i_var$i_dir
     cv_variants = i_var$cv_variants
