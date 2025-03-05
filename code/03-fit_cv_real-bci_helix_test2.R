@@ -29,22 +29,22 @@ for(i_dir in directories){
     all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = i_cv)))
   }
 }
-all_variants = all_variants[1:16]
-cl = parallel::makeCluster(8L)
-parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
-parallel::clusterEvalQ(cl, {
-  library(data.table)
-  library(FINN)
-  library(torch)
-  library(glmmTMB)
-})
+# all_variants = all_variants[1:16]
+# cl = parallel::makeCluster(8L)
+# parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
+# parallel::clusterEvalQ(cl, {
+#   library(data.table)
+#   library(FINN)
+#   library(torch)
+#   library(glmmTMB)
+# })
 
 # i_var = all_variants[[1]]
 # remove all objects in the environment but "overwrite" and "i_var"
 
 # rm(list = setdiff(ls(), c("overwrite", "all_lossvars", "Nepochs", "i_var")))
-parallel::clusterExport(cl, varlist = list("overwrite", "all_lossvars", "Nepochs"), envir = environment())
-.null = parLapply(cl, all_variants, function(i_var){
+# parallel::clusterExport(cl, varlist = list("overwrite", "all_lossvars", "Nepochs"), envir = environment())
+# .null = parLapply(cl, all_variants, function(i_var){
   i_dir = i_var$i_dir
   i_cv = i_var$cv_variants
   cv_S = tstrsplit(i_cv, "_", fixed = TRUE)[[1]][1]
@@ -74,6 +74,7 @@ parallel::clusterExport(cl, varlist = list("overwrite", "all_lossvars", "Nepochs
 
     env_obs = merge(obs_dt, env_dt, by = c('year', "siteID"))
     ## get init parameters ####
+    cat("\nget init parameters")
     ### growth ####
     if(grepl("genus",i_name)){
       env_obs$species_fac <- as.factor(env_obs$species)
@@ -123,6 +124,7 @@ parallel::clusterExport(cl, varlist = list("overwrite", "all_lossvars", "Nepochs
     }
 
     ## create model ####
+    cat("\ncreate model")
     m1 = finn(
       N_species = Nspecies,
       competition_process = createProcess(~0, func = FINN::competition, optimizeSpecies = TRUE, optimizeEnv = TRUE),
@@ -132,18 +134,22 @@ parallel::clusterExport(cl, varlist = list("overwrite", "all_lossvars", "Nepochs
     )
 
     ## fit model ####
+    cat("\create cohorts")
     cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = Nspecies)
 
     Nsites = length(unique(obs_dt$siteID))
     batchsize = ceiling((Nsites)/2) # TODO change back
     Npatches = uniqueN(cohorts_dt$patchID)
 
+    cat("\nfit model:", i_name)
     m1$fit(data = obs_dt, batchsize = batchsize, env = env_dt, init_cohort = cohort1,  epochs = Nepochs, patches = Npatches, lr = 0.01, checkpoints = 5L,
            optimizer = torch::optim_ignite_adam, device = "gpu", record_gradients = FALSE, weights = c(0.1, 10, 1.0, 1, 1, 1), plot_progress = FALSE,
            loss= c(dbh = "mse", ba = "mse", trees = "nbinom", growth = "mse", mortality = "mse", regeneration = "nbinom")
     )
 
+    cat("\nmodel fitted:", i_name)
     if(!dir.exists(dirname(out_dir))) dir.create(dirname(out_dir), recursive = T)
+    cat("\nsave model:", i_name)
     torch::torch_save(m1, out_dir)
 
     #cat(paste("Finished", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
@@ -151,8 +157,8 @@ parallel::clusterExport(cl, varlist = list("overwrite", "all_lossvars", "Nepochs
     gc()
     torch::cuda_empty_cache()
   }
-})
+# })
 # }
 # }
-parallel::stopCluster(cl)
+# parallel::stopCluster(cl)
 cat("\nscript finished")
