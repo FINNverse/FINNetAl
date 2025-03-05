@@ -8,7 +8,7 @@ library(parallel)
 # if(file.exists(logfile)) file.remove(logfile)
 
 Nepochs = 2
-
+overwrite = F
 lossvars_comb = "ba.trees.dbh.growth.mort.reg"
 all_lossvars = c("ba", "trees", "dbh", "growth", "mort", "reg")
 
@@ -30,7 +30,6 @@ for(i_dir in directories){
   }
 }
 
-overwrite = F
 cl = parallel::makeCluster(32L)
 nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
@@ -40,8 +39,11 @@ parallel::clusterEvalQ(cl, {
   library(torch)
   library(glmmTMB)
 })
-i_var = all_variants[[1]]
-parallel::clusterExport(cl, varlist = list("overwrite"), envir = environment())
+# i_var = all_variants[[1]]
+# remove all objects in the environment but "overwrite" and "i_var"
+
+# rm(list = setdiff(ls(), c("overwrite", "all_lossvars", "Nepochs", "i_var")))
+parallel::clusterExport(cl, varlist = list("overwrite", "all_lossvars", "Nepochs"), envir = environment())
 .null = parLapply(cl, all_variants, function(i_var){
     i_dir = i_var$i_dir
     i_cv = i_var$cv_variants
@@ -82,7 +84,7 @@ parallel::clusterExport(cl, varlist = list("overwrite"), envir = environment())
       if(grepl("genus",i_name)){
         env_obs$species_fac <- as.factor(env_obs$species)
         growth_init_model = glmmTMB(log(growth+1)~1+Prec+SR_kW_m2+RH_prc+T_max+T_min+swp+(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp||species_fac), data = env_obs, family = gaussian())
-        init_growth_env = coef(growth_init_model)[[1]][[1]]
+        init_growth_env = as.matrix(coef(growth_init_model)[[1]][[1]])
         init_growth_env[is.na(init_growth_env)] = 0
       }else if(grepl("pft", i_name)){
         growth_init_model = lm(log(growth+1)~(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp):as.factor(species)+as.factor(species)+0, data = env_obs)
@@ -94,7 +96,7 @@ parallel::clusterExport(cl, varlist = list("overwrite"), envir = environment())
         env_obs$Fmort = scales::rescale(env_obs$mort, c(0.0001, 1-0.0001))
         env_obs$species_fac <- as.factor(env_obs$species)
         mort_init_model = glmmTMB(Fmort~1+Prec+SR_kW_m2+RH_prc+T_max+T_min+swp+(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp||species_fac), data = env_obs, family = beta_family())
-        init_mort_env = coef(mort_init_model)[[1]][[1]]
+        init_mort_env = as.matrix(coef(mort_init_model)[[1]][[1]])
         init_mort_env[is.na(init_mort_env)] = 0
       }else if(grepl("pft", i_name)){
         env_obs$Fmort = scales::rescale(env_obs$mort, c(0.0001, 1-0.0001))
@@ -105,7 +107,7 @@ parallel::clusterExport(cl, varlist = list("overwrite"), envir = environment())
       ### reg ####
       if(grepl("genus",i_name)){
         reg_init_model = glmmTMB(ceiling(reg)~1+Prec+SR_kW_m2+RH_prc+T_max+T_min+swp+(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp||species_fac), data = env_obs, family = "nbinom1")
-        init_reg_env = coef(reg_init_model)[[1]][[1]]
+        init_reg_env = as.matrix(coef(reg_init_model)[[1]][[1]])
         init_reg_env[is.na(init_reg_env)] = 0
       }else if(grepl("pft", i_name)){
         reg_init_model = glmmTMB(reg~(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp):as.factor(species)+as.factor(species)+0, data = env_obs, family = "nbinom1")
@@ -113,12 +115,13 @@ parallel::clusterExport(cl, varlist = list("overwrite"), envir = environment())
         init_reg_env[is.na(init_reg_env)] = 0
       }
 
-      init_growth_env[init_growth_env > 5] = 5
-      init_growth_env[init_growth_env < -5] = -5
-      init_mort_env[init_mort_env > 5] = 5
-      init_mort_env[init_mort_env < -5] = -5
-      init_reg_env[init_reg_env > 5] = 5
-      init_reg_env[init_reg_env < -5] = -5
+      max_val = 5
+      init_growth_env[init_growth_env > max_val] = max_val
+      init_growth_env[init_growth_env < -max_val] = -max_val
+      init_mort_env[init_mort_env > max_val] = max_val
+      init_mort_env[init_mort_env < -max_val] = -max_val
+      init_reg_env[init_reg_env > max_val] = max_val
+      init_reg_env[init_reg_env < -max_val] = -max_val
 
       obsNA = unlist(strsplit(response, ".", fixed = TRUE))
       for(i_lossvar in all_lossvars[!(all_lossvars %in% obsNA)]){
@@ -129,7 +132,7 @@ parallel::clusterExport(cl, varlist = list("overwrite"), envir = environment())
       m1 = finn(
         N_species = Nspecies,
         competition_process = createProcess(~0, func = FINN::competition, optimizeSpecies = TRUE, optimizeEnv = TRUE),
-        growth_process = createProcess(~., initEnv = list(init_growth_env), func = FINN::growth, optimizeSpecies = TRUE, optimizeEnv = TRUE),
+        growth_process = createProcess(~., initEnv = list(as.matrix(init_growth_env)), func = FINN::growth, optimizeSpecies = TRUE, optimizeEnv = TRUE),
         regeneration_process = createProcess(~., initEnv = list(init_reg_env), func = FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
         mortality_process = createProcess(~., initEnv = list(init_mort_env), func = FINN::mortality, optimizeSpecies = TRUE, optimizeEnv = TRUE)
       )
@@ -142,7 +145,7 @@ parallel::clusterExport(cl, varlist = list("overwrite"), envir = environment())
       Npatches = uniqueN(cohorts_dt$patchID)
 
       m1$fit(data = obs_dt, batchsize = batchsize, env = env_dt, init_cohort = cohort1,  epochs = Nepochs, patches = Npatches, lr = 0.01, checkpoints = 5L,
-             optimizer = torch::optim_ignite_adam, device = "gpu", record_gradients = FALSE,weights = c(0.1, 10, 1.0, 1, 1, 1), plot_progress = FALSE,
+             optimizer = torch::optim_ignite_adam, device = "gpu", record_gradients = FALSE, weights = c(0.1, 10, 1.0, 1, 1, 1), plot_progress = FALSE,
              loss= c(dbh = "mse", ba = "mse", trees = "nbinom", growth = "mse", mortality = "mse", regeneration = "nbinom")
       )
 
