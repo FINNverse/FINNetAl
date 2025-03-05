@@ -1,0 +1,86 @@
+ [1] "ba.trees.dbh.growth"          "ba.trees.dbh.mort"           
+ [3] "ba.trees.dbh.reg"             "ba.trees.dbh.growth.mort"    
+ [5] "ba.trees.dbh.growth.reg"      "ba.trees.dbh.mort.reg"       
+ [7] "ba.trees.dbh.growth.mort.reg" "ba.growth.mort.reg"          
+ [9] "ba.trees.dbh.growth.mort.reg" "ba"                          
+[11] "ba.trees.dbh"                
+[[1]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[2]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[3]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[4]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[5]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[6]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[7]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[8]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[9]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[10]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[11]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[12]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[13]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[14]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[15]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
+[[16]]
+ [1] "glmmTMB"    "torch"      "FINN"       "data.table" "stats"     
+ [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
+[11] "base"      
+
