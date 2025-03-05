@@ -4,7 +4,7 @@ library(ggh4x)
 library(FINN)
 library(torch)
 
-files_list = list.files(path = "results/02_simulated/", pattern = "*.pt", full.names = TRUE)
+files_list = list.files(path = "results/02_realdata/", pattern = "*.pt", full.names = TRUE)
 # files_list = files_list[grepl("T0", files_list)]
 
 # Read all files
@@ -18,7 +18,7 @@ for(i in 1:length(m_list)){
   m = m_list[[i]]
   name = names(m_list)[i]
   folder = strsplit(name,"_")[[1]][1]
-  files_dir = paste0("simulated_data/sim-split/CVfolds/",folder,"/")
+  files_dir = paste0("data/BCI/CVsplits-realdata/",folder,"/")
   cv_S = tstrsplit(name, "_", fixed = TRUE)[[2]][1]
   cv_T = tstrsplit(name, "_", fixed = TRUE)[[3]][1]
   cv = paste0(cv_S, cv_T)
@@ -26,18 +26,18 @@ for(i in 1:length(m_list)){
   obs_dt_train <- fread(paste0(files_dir, "obs_dt_",cv_S,"_",cv_T,"_train.csv"))
   obs_dt_test <- fread(paste0(files_dir, "obs_dt_",cv_S,"_",cv_T,"_test.csv"))
   env_dt_train <- fread(paste0(files_dir, "env_dt_",cv_S,"_",cv_T,"_train.csv"))
-  env_dt_train <- env_dt_train[,-c("fold", "holdout", "siteID_holdout")]
+  env_dt_train <- env_dt_train[,-c("splitID", "holdout", "siteID_holdout")]
   env_dt_test <- fread(paste0(files_dir, "env_dt_",cv_S,"_",cv_T,"_test.csv"))
-  env_dt_test <- env_dt_test[,-c("fold", "holdout", "siteID_holdout")]
+  env_dt_test <- env_dt_test[,-c("splitID", "holdout", "siteID_holdout")]
   cohorts_dt_train <- fread(paste0(files_dir, "initial_cohorts_",cv_S,"_",cv_T,"_train.csv"))
   cohorts_dt_test <- fread(paste0(files_dir, "initial_cohorts_",cv_S,"_",cv_T,"_test.csv"))
 
   Nspecies = max(obs_dt_train$species)
   Npatches = max(cohorts_dt_train$patchID)
 
-  cohorts_dt_train <- cohorts_dt_train[,.(siteID, patchID, cohortID, species, dbh = round(dbh_cm,4), trees)]
+  # cohorts_dt_train <- cohorts_dt_train[,.(siteID, patchID, cohortID, species, dbh = round(dbh_cm,4), trees)]
   cohorts_train = FINN::CohortMat(cohorts_dt_train, sp = Nspecies)
-  cohorts_dt_test <- cohorts_dt_test[,.(siteID, patchID, cohortID, species, dbh = round(dbh_cm,4), trees)]
+  # cohorts_dt_test <- cohorts_dt_test[,.(siteID, patchID, cohortID, species, dbh = round(dbh_cm,4), trees)]
   cohorts_test = FINN::CohortMat(cohorts_dt_test, sp = Nspecies)
 
   pred_train = m$simulate(env = env_dt_train, init_cohort = cohorts_train, patches = Npatches)
@@ -69,11 +69,11 @@ for(i in 1:length(pred_list)){
         pred_test = data.table(pred_l$pred$test$long$site, pred_obs = "pred", test_train = "test"),
         obs_dt_train =
           data.table(
-            melt(pred_l$obs$train[,-c("fold","r_mean_ha", "holdout", "siteID_holdout")], id.vars = c("siteID", "species", "year")),
+            melt(pred_l$obs$test[,c("siteID", "year", "species", "ba", "dbh", "trees", "growth", "mort", "reg")], id.vars = c("siteID", "species", "year")),
             pred_obs = "obs", test_train = "train"),
         obs_dt_test =
           data.table(
-            melt(pred_l$obs$test[,-c("fold","r_mean_ha", "holdout", "siteID_holdout")], id.vars = c("siteID", "species", "year")),
+            melt(pred_l$obs$test[,c("siteID", "year", "species", "ba", "dbh", "trees", "growth", "mort", "reg")], id.vars = c("siteID", "species", "year")),
             pred_obs = "obs", test_train = "test")
       ),
       use.names=TRUE
@@ -124,8 +124,8 @@ cors_dt1 =
   pred_dt[,.(
     rmse = sqrt(mean((pred - obs)^2, na.rm = T)),
     spearmans_r = cor(pred, obs, method = "spearman"),
-    r2 = r2(pred, obs),
-    r2_2 = calculate_r2(pred, obs),
+    # r2 = r2(pred, obs),
+    r2 = calculate_r2(pred, obs),
     obs_center = sum(range(obs, na.rm = T))/2,
     pred_center = sum(range(pred, na.rm = T)/2),
     N = .N
@@ -135,7 +135,7 @@ cors_dt <- cors_dt1[,.(
   rmse = mean(rmse),
   spearmans_r = mean(spearmans_r),
   r2 = mean(r2),
-  r2_2 = mean(r2_2),
+  # r2_2 = mean(r2_2),
   obs_center = mean(obs_center),
   pred_center = mean(pred_center),
   N = sum(N)
@@ -148,11 +148,11 @@ p_s = ggplot(
   cors_dt[T_test_train == "train"],
   aes(y = forcats::fct_reorder(response, N_dots), x = (as.factor(variable)))
   )+
-  geom_tile(aes(fill = r2_2))+
+  geom_tile(aes(fill = r2))+
   # geom_tile(aes(fill = spearmans_r))+
   facet_grid(scale~S_test_train, scales = "free")+
   # geom_text(aes(label = round(spearmans_r,2)), size = 3, color = "black")+
-  geom_text(aes(label = round(r2_2,2)), size = 3, color = "black")+
+  geom_text(aes(label = round(r2,2)), size = 3, color = "black")+
   scale_fill_gradient(low = "white", high = "red", limits = c(0,1))+
   ggtitle("spatial holdout")+
   theme_classic()+
@@ -165,11 +165,11 @@ p_t = ggplot(
   cors_dt[S_test_train == "train"],
   aes(y = forcats::fct_reorder(response, N_dots), x = (as.factor(variable)))
   )+
-  geom_tile(aes(fill = r2_2))+
+  geom_tile(aes(fill = r2))+
   # geom_tile(aes(fill = spearmans_r))+
   facet_grid(scale~T_test_train, scales = "free")+
   # geom_text(aes(label = round(spearmans_r,2)), size = 3, color = "black")+
-  geom_text(aes(label = round(r2_2,2)), size = 3, color = "black")+
+  geom_text(aes(label = round(r2,2)), size = 3, color = "black")+
   scale_fill_gradient(low = "white", high = "red", limits = c(0,1))+
   ggtitle("temporal holdout")+
   theme_classic()+

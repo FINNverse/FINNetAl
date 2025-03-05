@@ -33,13 +33,13 @@ parallel::clusterEvalQ(cl, {
   library(glmmTMB)
 })
 
-i_dir = directories[4]
+i_dir = directories[1]
 i_cv = cv_variants[4]
 overwrite = F
-cat("\nscript finished")
+cat("\nscript started")
 for(i_dir in directories){
   # for(i_cv in cv_variants){
-  parallel::clusterExport(cl, varlist = list("i_dir"), envir = environment())
+  parallel::clusterExport(cl, varlist = list("i_dir", "overwrite"), envir = environment())
   .null = parLapply(cl, cv_variants, function(i_cv){
       cv_S = tstrsplit(i_cv, "_", fixed = TRUE)[[1]][1]
       cv_T = tstrsplit(i_cv, "_", fixed = TRUE)[[2]][1]
