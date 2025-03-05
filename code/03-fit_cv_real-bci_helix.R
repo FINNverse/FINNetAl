@@ -24,9 +24,9 @@ directories = rev(directories)
 cat("\nscript started")
 all_variants = list()
 for(i_dir in directories){
-  for(i_var in cv_variants){
+  for(i_cv in cv_variants){
   # all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = cv_variants)))
-  all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = i_var)))
+  all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = i_cv)))
   }
 }
 
@@ -44,7 +44,7 @@ i_var = all_variants[[1]]
 parallel::clusterExport(cl, varlist = list("overwrite"), envir = environment())
 .null = parLapply(cl, all_variants, function(i_var){
     i_dir = i_var$i_dir
-    cv_variants = i_var$cv_variants
+    i_cv = i_var$cv_variants
     cv_S = tstrsplit(i_cv, "_", fixed = TRUE)[[1]][1]
     cv_T = tstrsplit(i_cv, "_", fixed = TRUE)[[2]][1]
     response = tstrsplit(i_cv, "_", fixed = TRUE)[[3]][1]
