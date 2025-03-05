@@ -7,7 +7,7 @@ library(parallel)
 # logfile <- "log_03-fit_cv_real-bci.txt"
 # if(file.exists(logfile)) file.remove(logfile)
 
-Nepochs = 8000
+Nepochs = 2
 
 lossvars_comb = "ba.trees.dbh.growth.mort.reg"
 all_lossvars = c("ba", "trees", "dbh", "growth", "mort", "reg")
@@ -18,12 +18,20 @@ fold_names = expand.grid(list(S_folds,T_folds))
 fold_names = paste0(fold_names$Var1, "_", fold_names$Var2)
 cv_variants <- paste0(rep(fold_names,each = length(unlist(lossvars_comb))),"_",unlist(lossvars_comb))
 
-directories <- list.files("data/BCI/CVsplits-realdata", full.names = T, pattern = "pft-")
-
-directories <- directories[grepl("pft", directories)]
+directories <- list.files("data/BCI/CVsplits-realdata", full.names = T, pattern = "genus-")
 directories = rev(directories)
 
-cl = parallel::makeCluster(64L)
+cat("\nscript started")
+all_variants = list()
+for(i_dir in directories){
+  for(i_var in cv_variants){
+  # all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = cv_variants)))
+  all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = i_var)))
+  }
+}
+
+overwrite = F
+cl = parallel::makeCluster(32L)
 nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
 parallel::clusterEvalQ(cl, {
@@ -32,20 +40,7 @@ parallel::clusterEvalQ(cl, {
   library(torch)
   library(glmmTMB)
 })
-
-i_dir = directories[4]
-i_cv = cv_variants[4]
-
-overwrite = F
-cat("\nscript finished")
-all_variants = list()
-for(i_dir in directories){
-  for(i_var in cv_variants){
-  # all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = cv_variants)))
-  all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = i_var)))
-  }
-}
-# for(i_cv in cv_variants){
+i_var = all_variants[[1]]
 parallel::clusterExport(cl, envir = environment())
 .null = parLapply(cl, all_variants, function(i_var){
     i_dir = i_var$i_dir
