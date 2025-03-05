@@ -66,15 +66,17 @@ parallel::clusterExport(cl, varlist = list("overwrite", "all_lossvars", "Nepochs
     cat("\nread data:", i_name)
     cat("\nCV variant:", i_cv)
     env_dt = fread(paste0(i_dir,"/env_dt_",cv_S,"_",cv_T,"_train.csv"))
-    env_dt = env_dt[,.(siteID, year, Prec, SR_kW_m2, RH_prc, T_max, T_min, swp )]
+    env_dt = env_dt[,c("siteID", "year", "Prec", "SR_kW_m2", "RH_prc", "T_max", "T_min", "swp")]
 
     obs_dt = fread(paste0(i_dir,"/obs_dt_",cv_S,"_",cv_T,"_train.csv"))
     # only pick columns siteID species  year   dbh    ba trees growth  mort   reg r_mean_ha
-    obs_dt = obs_dt[,.(siteID, species, year, dbh, ba, trees, growth, mort, reg)]
+    # obs_dt = obs_dt[,.(siteID, species, year, dbh, ba, trees, growth, mort, reg)]
+    obs_dt = obs_dt[,c("siteID", "species", "year", "dbh", "ba", "trees", "growth", "mort", "reg")]
 
     cohorts_dt = fread(paste0(i_dir,"/initial_cohorts_",cv_S,"_",cv_T,"_train.csv"))
     # only pick columns siteID   dbh species patchID census trees cohortID
-    cohorts_dt = cohorts_dt[,.(siteID, dbh, species, patchID, census, trees, cohortID)]
+    # cohorts_dt = cohorts_dt[,.(siteID, dbh, species, patchID, census, trees, cohortID)]
+    cohorts_dt = cohorts_dt[,c("siteID", "dbh", "species", "patchID", "census", "trees", "cohortID")]
 
     Nspecies = max(obs_dt$species)
     Nenv = ncol(env_dt) - 2
