@@ -56,7 +56,7 @@ parallel::clusterExport(cl, varlist = list("overwrite"), envir = environment())
     # cat(paste("Starting", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
 
     myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
-    dist = cbind(nodes,0:1)
+    dist = cbind(nodes,0)
     dev = as.integer(as.numeric(dist[which(dist[,1] %in% myself, arr.ind = TRUE), 2]))
 
     Sys.setenv(CUDA_VISIBLE_DEVICES=dev)
