@@ -7,7 +7,7 @@ library(parallel)
 # logfile <- "log_03-fit_cv_real-bci.txt"
 # if(file.exists(logfile)) file.remove(logfile)
 
-Nepochs = 2
+Nepochs = 8000
 overwrite = F
 lossvars_comb = "ba.trees.dbh.growth.mort.reg"
 all_lossvars = c("ba", "trees", "dbh", "growth", "mort", "reg")
