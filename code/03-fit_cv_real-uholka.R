@@ -4,6 +4,7 @@ library(torch)
 library(glmmTMB)
 library(parallel)
 
+
 # logfile <- "log_03-fit_cv_real-bci.txt"
 # if(file.exists(logfile)) file.remove(logfile)
 
@@ -21,7 +22,7 @@ cv_variants <- paste0(rep(fold_names,each = length(unlist(lossvars_comb))),"_",u
 directories <- list.files("data/Uholka/CVsplits-realdata", full.names = T, pattern = "species")
 directories = rev(directories)
 
-cl = parallel::makeCluster(8L)
+cl = parallel::makeCluster(9L)
 nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
 parallel::clusterEvalQ(cl, {
@@ -29,6 +30,8 @@ parallel::clusterEvalQ(cl, {
   library(FINN)
   library(torch)
   library(glmmTMB)
+  torch::torch_set_num_interop_threads(3L)
+  torch::torch_set_num_threads(3L)
 })
 
 i_dir = directories[4]
