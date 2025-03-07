@@ -117,6 +117,7 @@ for(dataset in unique(names(pred_list))){
 }
 all_dt[pred_obs == "pred" & is.na(value) & variable == "reg", value := 0,]
 
+
 # r2 = function(pred, obs, na.rm = T) {
 #   SS_res <- sum((obs - pred)^2, na.rm = na.rm)  # Sum of squared residuals
 #   SS_tot <- sum((obs - mean(obs))^2, na.rm = na.rm) # Total sum of squares
@@ -139,11 +140,13 @@ calculate_r2 <- function(observed, predicted) {
 # dcast by pred_obs
 pred_dt <- dcast(all_dt, siteID+year+species+variable+test_train+simreal+dataset+scale+cv+response~pred_obs, value.var = "value")
 pred_dt <- pred_dt[!is.na(obs),]
+pred_dt <- pred_dt[cv != "S0T0"]
 
-pred_dt[grepl("S0", cv), S_test_train := "train",]
-pred_dt[!grepl("S0", cv), S_test_train := "test",]
-pred_dt[grepl("T0", cv), T_test_train := "train",]
-pred_dt[!grepl("T0", cv), T_test_train := "test",]
+pred_dt[grepl("T0", cv), spatial_holdout := T,]
+pred_dt[!grepl("T0", cv), spatial_holdout := F,]
+pred_dt[grepl("S0", cv), temporal_holdout := T,]
+pred_dt[!grepl("S0", cv), temporal_holdout := F,]
+
 # pred_dt[grecv == "S0T0", full_test_train := "train",]
 # pred_dt[cv != "S0T0", full_test_train := "test",]
 
@@ -156,7 +159,7 @@ cors_dt1 =
     obs_center = sum(range(obs, na.rm = T))/2,
     pred_center = sum(range(pred, na.rm = T)/2),
     N = .N
-  ), by = .(variable, cv,S_test_train, T_test_train , scale, response, simreal, dataset)]
+  ), by = .(variable, cv, spatial_holdout, temporal_holdout, test_train, scale, response, simreal, dataset)]
 
 cors_dt <- cors_dt1[,.(
   rmse = mean(rmse),
@@ -166,45 +169,43 @@ cors_dt <- cors_dt1[,.(
   obs_center = mean(obs_center),
   pred_center = mean(pred_center),
   N = sum(N)
-  ), by = .(variable, S_test_train, T_test_train ,scale,response, simreal, dataset)]
+  ), by = .(variable, spatial_holdout, temporal_holdout, test_train, scale,response, simreal, dataset)]
 # count number of "." in response
 cors_dt[, N_dots := stringr::str_count(response, "\\.")]
 
+cors_dt[, ylabels := paste0(response, " (",simreal,")"),]
+cors_dt[, N_dots := stringr::str_count(ylabels, "\\.")]
+cors_dt[simreal == "real", N_dots := 50,]
+cors_dt[, ylabels := forcats::fct_reorder(ylabels, N_dots),]
+
 for(i_dataset in c("BCI", "Uholka")){
-  p_dat_s = cors_dt[T_test_train == "train" & dataset == i_dataset]
-  p_dat_t = cors_dt[S_test_train == "train" & dataset == i_dataset]
-  p_s = ggplot(
-    p_dat_s,
-    aes(y = forcats::fct_reorder(response, N_dots), x = (as.factor(variable)))
+  p_dat_s = cors_dt[spatial_holdout == T & dataset == i_dataset]
+  p_dat_s$holdout = "spatial"
+  p_dat_t = cors_dt[temporal_holdout == T & dataset == i_dataset]
+  p_dat_t$holdout = "temporal"
+  p_dat = rbind(p_dat_s, p_dat_t)
+  p_all = ggplot(
+    p_dat,
+    aes(y = forcats::fct_reorder(ylabels, N_dots), x = (as.factor(variable)))
     )+
     geom_tile(aes(fill = spearmans_r))+
-    facet_grid(scale~simreal+S_test_train, scales = "fixed")+
+    facet_grid(gsub("-","\n",scale)~paste0(holdout,"\n",test_train), scales = "fixed")+
     geom_text(aes(label = round(spearmans_r,2)), size = 3, color = "black")+
     # scale_fill_gradient(low = "white", high = "red", limits = c(0,1))+
     scale_fill_gradientn(colors = c("blue", "white", "red"), limits = c(0,1))+
-    ggtitle(paste(unique(p_dat_s$dataset),"spatial holdout"))+
+    ggtitle(paste(unique(p_dat_s$dataset)))+
     theme_classic()+
     theme(legend.position = "none")+
+    # rotate facet labels
+    theme(
+      strip.text.y = element_text(angle = 0),
+      axis.text.x = element_text(angle = 30, vjust = 1, hjust=1)
+      )+
+    # rotate x labels
     xlab("predicted variable")+
     ylab("response variables")
-  # p_s
-  p_t = ggplot(
-    p_dat_t,
-    aes(y = forcats::fct_reorder(response, N_dots), x = (as.factor(variable)))
-    )+
-    geom_tile(aes(fill = spearmans_r))+
-    facet_grid(scale~simreal+T_test_train, scales = "fixed")+
-    geom_text(aes(label = round(spearmans_r,2)), size = 3, color = "black")+
-    # scale_fill_gradient(low = "white", high = "red", limits = c(0,1))+
-    scale_fill_gradientn(colors = c("blue", "white", "red"), limits = c(0,1))+
-    ggtitle(paste(unique(p_dat_t$dataset),"temporal holdout"))+
-    theme_classic()+
-    theme(legend.position = "none")+
-    xlab("predicted variable")+
-    ylab("response variables")
-  # p_t
-  p_all = gridExtra::grid.arrange(p_s, p_t, ncol = 2)
-  ggsave(paste0("figures/fits_",i_dataset,".png"), p_all, width = 20, height = 8)
+  p_all
+  ggsave(paste0("figures/fits_",i_dataset,".png"), p_all, width = 12, height = 8)
 }
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
@@ -239,7 +240,6 @@ for(i_result_folder in result_folders){
     )
   }
 }
-
 j = 1
 pars_dt <- data.table()
 cat("\n")
