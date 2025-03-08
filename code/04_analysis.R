@@ -99,7 +99,7 @@ for(dataset in unique(names(pred_list))){
             pred_test = data.table(pre_test_temp, pred_obs = "pred", test_train = "test", simreal = simreal, dataset = dataset),
             obs_dt_train =
               data.table(
-                melt(pred_l$obs$test[,.(siteID, year, species, ba, dbh, trees, growth, mort, reg)], id.vars = c("siteID", "species", "year")),
+                melt(pred_l$obs$train[,.(siteID, year, species, ba, dbh, trees, growth, mort, reg)], id.vars = c("siteID", "species", "year")),
                 pred_obs = "obs", test_train = "train", simreal = simreal, dataset = dataset),
             obs_dt_test =
               data.table(
@@ -142,9 +142,8 @@ pred_dt <- dcast(all_dt, siteID+year+species+variable+test_train+simreal+dataset
 pred_dt <- pred_dt[!is.na(obs),]
 pred_dt <- pred_dt[cv != "S0T0"]
 
-pred_dt[grepl("T0", cv), spatial_holdout := T,]
-pred_dt[!grepl("T0", cv), spatial_holdout := F,]
-pred_dt[grepl("S0", cv), temporal_holdout := T,]
+# pred_dt[grepl("T0", cv), spatial_holdout := T,]
+pred_dt[!grepl("T0", cv), spatial_holdout := T,]
 pred_dt[!grepl("S0", cv), temporal_holdout := F,]
 
 # pred_dt[grecv == "S0T0", full_test_train := "train",]
