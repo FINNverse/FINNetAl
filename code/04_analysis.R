@@ -5,77 +5,84 @@ library(FINN)
 library(torch)
 
 result_folders = c("02_realdata", "02_simulated")
+# get current git hash
+git_hash <- system("git rev-parse --short HEAD", intern = TRUE)
 
-pred_list <- list()
-i_result_folder = result_folders[1]
-for(i_result_folder in result_folders){
-  cat("\nstarting ", i_result_folder,"\n")
-  if(i_result_folder == "02_realdata"){
-    split_location = "CVsplits-realdata/"
-    simreal = "real"
-  }else if(i_result_folder == "02_simulated"){
-    split_location = "CVsplits-simdata/"
-    simreal = "sim"
-  }
+if(!file.exists(paste0("results/pred_list_",git_hash,".rds"))){
+  pred_list <- list()
+  i_result_folder = result_folders[1]
+  for(i_result_folder in result_folders){
+    cat("\nstarting ", i_result_folder,"\n")
+    if(i_result_folder == "02_realdata"){
+      split_location = "CVsplits-realdata/"
+      simreal = "real"
+    }else if(i_result_folder == "02_simulated"){
+      split_location = "CVsplits-simdata/"
+      simreal = "sim"
+    }
 
-  files_list = list.files(path = paste0("results/", i_result_folder,"/"), pattern = "*.pt", full.names = TRUE)
+    files_list = list.files(path = paste0("results/", i_result_folder,"/"), pattern = "*.pt", full.names = TRUE)
 
-  # files_list = files_list[grepl("T0", files_list)]
+    # files_list = files_list[grepl("T0", files_list)]
 
-  # Read all files
-  m_list <- lapply(files_list, torch::torch_load)
-  names(m_list) <- gsub(".pt","", basename(files_list))
+    # Read all files
+    m_list <- lapply(files_list, torch::torch_load)
+    names(m_list) <- gsub(".pt","", basename(files_list))
 
-  # i=4
-  i = 1
-  for(i in 1:length(m_list)){
-    m = m_list[[i]]
-    name = names(m_list)[i]
-    folder = strsplit(name,"_")[[1]][1]
-    cat("\r", i, "of", length(m_list), "start model:", name, "                                          ")
-    if(!grepl("species", folder)) dataset = "BCI"
-    if(grepl("species", folder)) dataset = "Uholka"
-    files_dir = paste0("data/",dataset,"/",split_location,folder,"/")
-    cv_S = tstrsplit(name, "_", fixed = TRUE)[[2]][1]
-    cv_T = tstrsplit(name, "_", fixed = TRUE)[[3]][1]
-    cv = paste0(cv_S, cv_T)
-    response = tstrsplit(name, "_", fixed = TRUE)[[4]][1]
-    obs_dt_train <- fread(paste0(files_dir, "obs_dt_",cv_S,"_",cv_T,"_train.csv"))
-    obs_dt_test <- fread(paste0(files_dir, "obs_dt_",cv_S,"_",cv_T,"_test.csv"))
-    env_dt_train <- fread(paste0(files_dir, "env_dt_",cv_S,"_",cv_T,"_train.csv"))
-    env_dt_train <- env_dt_train[,-c("splitID", "holdout", "siteID_holdout")]
-    env_dt_test <- fread(paste0(files_dir, "env_dt_",cv_S,"_",cv_T,"_test.csv"))
-    env_dt_test <- env_dt_test[,-c("splitID", "holdout", "siteID_holdout")]
-    cohorts_dt_train <- fread(paste0(files_dir, "initial_cohorts_",cv_S,"_",cv_T,"_train.csv"))
-    cohorts_dt_test <- fread(paste0(files_dir, "initial_cohorts_",cv_S,"_",cv_T,"_test.csv"))
+    # i=4
+    i = 1
+    for(i in 1:length(m_list)){
+      m = m_list[[i]]
+      name = names(m_list)[i]
+      folder = strsplit(name,"_")[[1]][1]
+      cat("\r", i, "of", length(m_list), "start model:", name, "                                          ")
+      if(!grepl("species", folder)) dataset = "BCI"
+      if(grepl("species", folder)) dataset = "Uholka"
+      files_dir = paste0("data/",dataset,"/",split_location,folder,"/")
+      cv_S = tstrsplit(name, "_", fixed = TRUE)[[2]][1]
+      cv_T = tstrsplit(name, "_", fixed = TRUE)[[3]][1]
+      cv = paste0(cv_S, cv_T)
+      response = tstrsplit(name, "_", fixed = TRUE)[[4]][1]
+      obs_dt_train <- fread(paste0(files_dir, "obs_dt_",cv_S,"_",cv_T,"_train.csv"))
+      obs_dt_test <- fread(paste0(files_dir, "obs_dt_",cv_S,"_",cv_T,"_test.csv"))
+      env_dt_train <- fread(paste0(files_dir, "env_dt_",cv_S,"_",cv_T,"_train.csv"))
+      env_dt_train <- env_dt_train[,-c("splitID", "holdout", "siteID_holdout")]
+      env_dt_test <- fread(paste0(files_dir, "env_dt_",cv_S,"_",cv_T,"_test.csv"))
+      env_dt_test <- env_dt_test[,-c("splitID", "holdout", "siteID_holdout")]
+      cohorts_dt_train <- fread(paste0(files_dir, "initial_cohorts_",cv_S,"_",cv_T,"_train.csv"))
+      cohorts_dt_test <- fread(paste0(files_dir, "initial_cohorts_",cv_S,"_",cv_T,"_test.csv"))
 
-    Nspecies = max(obs_dt_train$species)
-    Npatches = max(cohorts_dt_train$patchID)
+      Nspecies = max(obs_dt_train$species)
+      Npatches = max(cohorts_dt_train$patchID)
 
-    # cohorts_dt_train <- cohorts_dt_train[,.(siteID, patchID, cohortID, species, dbh = round(dbh_cm,4), trees)]
-    cohorts_train = FINN::CohortMat(cohorts_dt_train, sp = Nspecies)
-    # cohorts_dt_test <- cohorts_dt_test[,.(siteID, patchID, cohortID, species, dbh = round(dbh_cm,4), trees)]
-    cohorts_test = FINN::CohortMat(cohorts_dt_test, sp = Nspecies)
+      # cohorts_dt_train <- cohorts_dt_train[,.(siteID, patchID, cohortID, species, dbh = round(dbh_cm,4), trees)]
+      cohorts_train = FINN::CohortMat(cohorts_dt_train, sp = Nspecies)
+      # cohorts_dt_test <- cohorts_dt_test[,.(siteID, patchID, cohortID, species, dbh = round(dbh_cm,4), trees)]
+      cohorts_test = FINN::CohortMat(cohorts_dt_test, sp = Nspecies)
 
-    pred_train = m$simulate(env = env_dt_train, init_cohort = cohorts_train, patches = Npatches)
-    pred_test = m$simulate(env = env_dt_test, init_cohort =  cohorts_test, patches = Npatches)
+      pred_train = m$simulate(env = env_dt_train, init_cohort = cohorts_train, patches = Npatches)
+      pred_test = m$simulate(env = env_dt_test, init_cohort =  cohorts_test, patches = Npatches)
 
-    pred_list[[dataset]][[simreal]][[name]] <- list(
-      pred = list(
-        train = pred_train,
-        test = pred_test
-      ),
-      obs = list(
-        train = obs_dt_train,
-        test = obs_dt_test
+      pred_list[[dataset]][[simreal]][[name]] <- list(
+        pred = list(
+          train = pred_train,
+          test = pred_test
+        ),
+        obs = list(
+          train = obs_dt_train,
+          test = obs_dt_test
+          )
         )
-      )
+    }
   }
+  saveRDS(pred_list, paste0("results/pred_list_",git_hash,".rds"))
+}else{
+  pred_list <- readRDS(paste0("results/pred_list_",git_hash,".rds"))
 }
 
 # pred_l = pred_list[[1]]
 # i=1
-all_dt <- data.table()
+all_dt_list <- list()
 for(dataset in unique(names(pred_list))){
   pred_dataset = pred_list[[dataset]]
   for(simreal in names(pred_dataset)){
@@ -84,7 +91,11 @@ for(dataset in unique(names(pred_list))){
     for(i in 1:length(pred_dataset_simreal)){
       pred_l = pred_dataset_simreal[[i]]
       name = names(pred_dataset_simreal)[i]
-      cat("\r",i, "of", length(pred_dataset_simreal), "combining", name, "                                          ")
+
+      if (i %% 100 == 0) {
+        cat("\r", i, "of", length(pred_dataset_simreal), "combining", name, "                                          ")
+      }
+
       pred_train_temp = pred_l$pred$train$long$site
       pred_train_temp <- pred_train_temp[variable != "reg"]
       pred_train_temp[variable == "r_mean_ha", variable := "reg",]
@@ -108,13 +119,16 @@ for(dataset in unique(names(pred_list))){
           ),
           use.names=TRUE
         )
-      dt$scale = strsplit(name,"_")[[1]][1]
-      dt$cv = paste0(strsplit(name,"_")[[1]][2], strsplit(name,"_")[[1]][3])
-      dt$response = strsplit(name,"_")[[1]][4]
-      all_dt <- rbind(all_dt, dt)
+      parts <- strsplit(name, "_")[[1]]
+      dt[, scale := parts[1]]
+      dt[, cv := paste0(parts[2], parts[3])]
+      dt[, response := parts[4]]
+      # all_dt <- rbind(all_dt, dt)
+      all_dt_list[[length(all_dt_list) + 1]] = dt
     }
   }
 }
+all_dt <- rbindlist(all_dt_list)
 all_dt[pred_obs == "pred" & is.na(value) & variable == "reg", value := 0,]
 
 
@@ -125,50 +139,82 @@ all_dt[pred_obs == "pred" & is.na(value) & variable == "reg", value := 0,]
 #   R_squared[R_squared<=0] = 0
 #   return(R_squared)
 # }
-calculate_r2 <- function(observed, predicted) {
-  # Remove NA values
-  valid_indices <- complete.cases(observed, predicted)
-  observed <- observed[valid_indices]
-  predicted <- predicted[valid_indices]
-  # Compute R-squared
-  ss_total <- sum((observed - mean(observed))^2)
-  ss_residual <- sum((observed - predicted)^2)
-  r2 <- 1 - (ss_residual / ss_total)
-  return(r2)
-}
 
 # dcast by pred_obs
-pred_dt <- dcast(all_dt, siteID+year+species+variable+test_train+simreal+dataset+scale+cv+response~pred_obs, value.var = "value")
+pred_dt1 <- dcast(all_dt, siteID+year+species+test_train+simreal+dataset+scale+cv+response~pred_obs+variable, value.var = "value", sep = ".")
+pred_dt1[,pred.trees_before :=  data.table::shift(pred.trees), by = .(siteID,species,test_train,simreal,dataset,scale,cv,response)]
+pred_dt1[,obs.trees_before := data.table::shift(obs.trees), by = .(siteID,species,test_train,simreal,dataset,scale,cv,response)]
+
+pred_dt1[(pred.trees_before == 0) & pred.trees == 0, ":="(pred.mort = NA, pred.growth = NA),]
+pred_dt1[(obs.trees_before == 0) & obs.trees == 0, ":="(obs.mort = NA, obs.growth = NA),]
+pred_dt1[obs.trees == 0, obs.dbh := NA]
+pred_dt1[pred.trees == 0, pred.dbh := NA]
+
+pred_dt2 <- melt(pred_dt1[,-c("obs.trees_before","pred.trees_before")], id.vars = c("siteID","year","species","test_train","simreal","dataset","scale","cv","response"))
+pred_dt2[,pred_obs := tstrsplit(variable, ".", fixed = T)[[1]],]
+pred_dt2[,variable := tstrsplit(variable, ".", fixed = T)[[2]],]
+pred_dt <- dcast(pred_dt2, siteID+year+species+test_train+simreal+dataset+scale+cv+response+variable~pred_obs, value.var = "value", sep = ".")
+
 pred_dt <- pred_dt[!is.na(obs),]
 pred_dt <- pred_dt[cv != "S0T0"]
 
 # pred_dt[grepl("T0", cv), spatial_holdout := T,]
-pred_dt[!grepl("T0", cv), spatial_holdout := T,]
-pred_dt[!grepl("S0", cv), temporal_holdout := F,]
+pred_dt[!grepl("S0", cv), spatial_holdout := T,]
+pred_dt[grepl("S0", cv), spatial_holdout := F,]
+pred_dt[!grepl("T0", cv), temporal_holdout := T,]
+pred_dt[grepl("T0", cv), temporal_holdout := F,]
 
-# pred_dt[grecv == "S0T0", full_test_train := "train",]
-# pred_dt[cv != "S0T0", full_test_train := "test",]
-
-cors_dt1 =
-  pred_dt[!is.na(obs),.(
+cors_dt1_all =
+  pred_dt[!is.na(obs) & !is.na(pred),.(
     rmse = sqrt(mean((pred - obs)^2, na.rm = T)),
     spearmans_r = cor(pred, obs, method = "spearman"),
-    # r2 = r2(pred, obs),
-    r2 = calculate_r2(pred, obs),
+    # pearson_r = cor(pred, obs, method = "pearson"),
     obs_center = sum(range(obs, na.rm = T))/2,
     pred_center = sum(range(pred, na.rm = T)/2),
     N = .N
   ), by = .(variable, cv, spatial_holdout, temporal_holdout, test_train, scale, response, simreal, dataset)]
 
-cors_dt <- cors_dt1[,.(
-  rmse = mean(rmse),
-  spearmans_r = mean(spearmans_r),
-  r2 = mean(r2),
-  # r2_2 = mean(r2_2),
-  obs_center = mean(obs_center),
-  pred_center = mean(pred_center),
+cors_dt1_all[is.infinite(pearson_r)]
+cors_dt1_all[is.na(pearson_r)]
+cors_dt1_all[is.na(spearmans_r)]
+
+cors_dt1_species =
+  pred_dt[!is.na(obs) & !is.na(pred),.(
+    rmse = sqrt(mean((pred - obs)^2, na.rm = T)),
+    spearmans_r = cor(pred, obs, method = "spearman"),
+    obs_center = sum(range(obs, na.rm = T))/2,
+    pred_center = sum(range(pred, na.rm = T)/2),
+    N = .N
+  ), by = .(variable, cv, spatial_holdout, temporal_holdout, test_train, scale, response, simreal, dataset, species)]
+
+cors_dt <-
+  rbind(
+    cors_dt1_all[,.(
+    rmse = mean(rmse, na.rm = T),
+    spearmans_r = mean(spearmans_r, na.rm = T),
+    obs_center = mean(obs_center, na.rm = T),
+    pred_center = mean(pred_center, na.rm = T),
+    N = sum(N),
+    species_cor = "overall"
+    ), by = .(variable, spatial_holdout, temporal_holdout, test_train, scale,response, simreal, dataset)],
+    cors_dt1_species[,.(
+    rmse = mean(rmse, na.rm = T),
+    spearmans_r = mean(spearmans_r, na.rm = T),
+    obs_center = mean(obs_center, na.rm = T),
+    pred_center = mean(pred_center, na.rm = T),
+    N = sum(N),
+    species_cor = "species"
+    ), by = .(variable, spatial_holdout, temporal_holdout, test_train, scale,response, simreal, dataset)]
+  )
+
+cors_dt_onlyspecies <- cors_dt1_species[,.(
+  rmse = mean(rmse, na.rm = T),
+  spearmans_r = mean(spearmans_r, na.rm = T),
+  obs_center = mean(obs_center, na.rm = T),
+  pred_center = mean(pred_center, na.rm = T),
   N = sum(N)
-  ), by = .(variable, spatial_holdout, temporal_holdout, test_train, scale,response, simreal, dataset)]
+), by = .(variable, spatial_holdout, temporal_holdout, test_train, scale,response, simreal, dataset, species)]
+
 # count number of "." in response
 cors_dt[, N_dots := stringr::str_count(response, "\\.")]
 
@@ -177,34 +223,41 @@ cors_dt[, N_dots := stringr::str_count(ylabels, "\\.")]
 cors_dt[simreal == "real", N_dots := 50,]
 cors_dt[, ylabels := forcats::fct_reorder(ylabels, N_dots),]
 
-for(i_dataset in c("BCI", "Uholka")){
-  p_dat_s = cors_dt[spatial_holdout == T & dataset == i_dataset]
-  p_dat_s$holdout = "spatial"
-  p_dat_t = cors_dt[temporal_holdout == T & dataset == i_dataset]
-  p_dat_t$holdout = "temporal"
-  p_dat = rbind(p_dat_s, p_dat_t)
-  p_all = ggplot(
-    p_dat,
-    aes(y = forcats::fct_reorder(ylabels, N_dots), x = (as.factor(variable)))
-    )+
-    geom_tile(aes(fill = spearmans_r))+
-    facet_grid(gsub("-","\n",scale)~paste0(holdout,"\n",test_train), scales = "fixed")+
-    geom_text(aes(label = round(spearmans_r,2)), size = 3, color = "black")+
-    # scale_fill_gradient(low = "white", high = "red", limits = c(0,1))+
-    scale_fill_gradientn(colors = c("blue", "white", "red"), limits = c(0,1))+
-    ggtitle(paste(unique(p_dat_s$dataset)))+
-    theme_classic()+
-    theme(legend.position = "none")+
-    # rotate facet labels
-    theme(
-      strip.text.y = element_text(angle = 0),
-      axis.text.x = element_text(angle = 30, vjust = 1, hjust=1)
+cors_dt[,variable := factor(variable, levels = c("ba","trees", "dbh", "growth", "mort", "reg"), labels = c("ba","trees", "dbh", "growth", "mort", "reg")),]
+
+for(i_species in c("overall", "species")){
+  for(i_dataset in c("BCI", "Uholka")){
+    # p_dat_s = cors_dt[spatial_holdout == T & temporal_holdout == F & dataset == i_dataset]
+    p_dat_s = cors_dt[spatial_holdout == T & temporal_holdout == F & dataset == i_dataset & species_cor == i_species]
+    p_dat_s$holdout = "spatial"
+    # p_dat_s[scale == "species-period3-1patch" & variable == "dbh" & simreal == "real" & ylabels == "ba.trees.dbh.growth.mort.reg (real)" & holdout == "spatial" & test_train == "test"]
+    # p_dat_t = cors_dt[temporal_holdout == T & spatial_holdout == F & dataset == i_dataset]
+    p_dat_t = cors_dt[temporal_holdout == T & spatial_holdout == F & dataset == i_dataset & species_cor == i_species]
+    p_dat_t$holdout = "temporal"
+    p_dat = rbind(p_dat_s, p_dat_t)
+    p_all = ggplot(
+      p_dat,
+      aes(y = forcats::fct_reorder(ylabels, N_dots), x = (as.factor(variable)))
       )+
-    # rotate x labels
-    xlab("predicted variable")+
-    ylab("response variables")
-  p_all
-  ggsave(paste0("figures/fits_",i_dataset,".png"), p_all, width = 12, height = 8)
+      geom_tile(aes(fill = spearmans_r))+
+      facet_grid(gsub("-","\n",scale)~paste0(holdout,"\n",test_train), scales = "fixed")+
+      geom_text(aes(label = round(spearmans_r,2)), size = 3, color = "black")+
+      # scale_fill_gradient(low = "white", high = "red", limits = c(0,1))+
+      scale_fill_gradientn(colors = c("blue", "white", "red"), limits = c(0,1))+
+      ggtitle(paste(unique(p_dat_s$dataset)))+
+      theme_classic()+
+      theme(legend.position = "none")+
+      # rotate facet labels
+      theme(
+        strip.text.y = element_text(angle = 0),
+        axis.text.x = element_text(angle = 30, vjust = 1, hjust=1)
+        )+
+      # rotate x labels
+      xlab("predicted variable")+
+      ylab("response variables")
+    p_all
+    ggsave(paste0("figures/fits_",i_dataset,"_",i_species,".png"), p_all, width = 12, height = 10)
+  }
 }
 
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=

@@ -9,3 +9,5 @@
 /figures
 /data/Uholka/data-cleaning
 *log
+
+results/pred_list_*
