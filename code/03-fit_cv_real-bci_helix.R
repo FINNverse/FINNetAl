@@ -36,7 +36,7 @@ cv_variants <- paste0(rep(fold_names,each = length(unlist(lossvars_comb))),"_",u
 
 directories <- list.files("data/BCI/CVsplits-realdata", full.names = T)
 
-directories <- directories[grepl("1patch", directories) & grepl("1patch", directories)]
+directories <- directories[grepl("1patch", directories) & grepl("genus", directories)]
 directories = rev(directories)
 
 cl = parallel::makeCluster(8L)
@@ -212,6 +212,8 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
     rm(m1)
     gc()
     torch::cuda_empty_cache()
+  }else{
+    cat("\nModel already exists:", out_dir)
   }
 })
 # }
