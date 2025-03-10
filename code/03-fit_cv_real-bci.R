@@ -8,7 +8,7 @@ library(parallel)
 # if(file.exists(logfile)) file.remove(logfile)
 
 Nepochs = 8000
-
+overwrite = F
 lossvars_comb = "ba.trees.dbh.growth.mort.reg"
 all_lossvars = c("ba", "trees", "dbh", "growth", "mort", "reg")
 
@@ -18,12 +18,12 @@ fold_names = expand.grid(list(S_folds,T_folds))
 fold_names = paste0(fold_names$Var1, "_", fold_names$Var2)
 cv_variants <- paste0(rep(fold_names,each = length(unlist(lossvars_comb))),"_",unlist(lossvars_comb))
 
-directories <- list.files("data/BCI/CVsplits-realdata", full.names = T, pattern = "pft-")
+directories <- list.files("data/BCI/CVsplits-realdata", full.names = T)
 
-directories <- directories[grepl("pft", directories)]
+directories <- directories[grepl("25patches", directories)]
 directories = rev(directories)
 
-cl = parallel::makeCluster(8L)
+cl = parallel::makeCluster(4L)
 nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
 parallel::clusterEvalQ(cl, {
@@ -33,19 +33,45 @@ parallel::clusterEvalQ(cl, {
   library(glmmTMB)
 })
 
-i_dir = directories[1]
-i_cv = cv_variants[4]
-overwrite = F
+# for(i_dir in directories){
+#   for(i_cv in cv_variants){
+#     cv_S = tstrsplit(i_cv, "_", fixed = TRUE)[[1]][1]
+#     cv_T = tstrsplit(i_cv, "_", fixed = TRUE)[[2]][1]
+#     response = tstrsplit(i_cv, "_", fixed = TRUE)[[3]][1]
+#     i_name = basename(i_dir)
+#     out_dir = paste0("results/","02_realdata/",i_name,"_",i_cv,".pt")
+#     if(!file.exists(out_dir)) stop()
+#   }
+# }
+
 cat("\nscript started")
+all_variants = list()
 for(i_dir in directories){
+  for(i_cv in cv_variants){
+    # all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = cv_variants)))
+    i_name = basename(i_dir)
+    out_dir = paste0("results/","02_realdata/",i_name,"_",i_cv,".pt")
+    if(!file.exists(out_dir)) all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = i_cv)))
+  }
+}
+
+
+# i_dir = directories[3]
+# i_cv = cv_variants[15]
+cat("\nscript started")
+# for(i_dir in directories){
   # for(i_cv in cv_variants){
-  parallel::clusterExport(cl, varlist = list("i_dir", "overwrite"), envir = environment())
-  .null = parLapply(cl, cv_variants, function(i_cv){
+  parallel::clusterExport(cl, varlist = c("i_dir", ls(envir = .GlobalEnv)), envir = environment())
+  .null = parLapply(cl, all_variants, function(i_var){
+      i_dir = i_var$i_dir
+      i_cv = i_var$cv_variants
       cv_S = tstrsplit(i_cv, "_", fixed = TRUE)[[1]][1]
       cv_T = tstrsplit(i_cv, "_", fixed = TRUE)[[2]][1]
       response = tstrsplit(i_cv, "_", fixed = TRUE)[[3]][1]
       i_name = basename(i_dir)
       out_dir = paste0("results/","02_realdata/",i_name,"_",i_cv,".pt")
+      stopifnot(length(overwrite) > 0)
+      stopifnot(length(all_lossvars) > 0)
       if(!file.exists(out_dir) | overwrite){
 
         # cat(paste("Starting", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
@@ -78,7 +104,7 @@ for(i_dir in directories){
         if(grepl("genus",i_name)){
           env_obs$species_fac <- as.factor(env_obs$species)
           growth_init_model = glmmTMB(log(growth+1)~1+Prec+SR_kW_m2+RH_prc+T_max+T_min+swp+(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp||species_fac), data = env_obs, family = gaussian())
-          init_growth_env = coef(growth_init_model)[[1]][[1]]
+          init_growth_env <- as.matrix(coef(growth_init_model)[[1]][[1]])
           init_growth_env[is.na(init_growth_env)] = 0
         }else if(grepl("pft", i_name)){
           growth_init_model = lm(log(growth+1)~(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp):as.factor(species)+as.factor(species)+0, data = env_obs)
@@ -90,7 +116,7 @@ for(i_dir in directories){
           env_obs$Fmort = scales::rescale(env_obs$mort, c(0.0001, 1-0.0001))
           env_obs$species_fac <- as.factor(env_obs$species)
           mort_init_model = glmmTMB(Fmort~1+Prec+SR_kW_m2+RH_prc+T_max+T_min+swp+(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp||species_fac), data = env_obs, family = beta_family())
-          init_mort_env = coef(mort_init_model)[[1]][[1]]
+          init_mort_env = as.matrix(coef(mort_init_model)[[1]][[1]])
           init_mort_env[is.na(init_mort_env)] = 0
         }else if(grepl("pft", i_name)){
           env_obs$Fmort = scales::rescale(env_obs$mort, c(0.0001, 1-0.0001))
@@ -101,7 +127,7 @@ for(i_dir in directories){
         ### reg ####
         if(grepl("genus",i_name)){
           reg_init_model = glmmTMB(ceiling(reg)~1+Prec+SR_kW_m2+RH_prc+T_max+T_min+swp+(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp||species_fac), data = env_obs, family = "nbinom1")
-          init_reg_env = coef(reg_init_model)[[1]][[1]]
+          init_reg_env = as.matrix(coef(reg_init_model)[[1]][[1]])
           init_reg_env[is.na(init_reg_env)] = 0
         }else if(grepl("pft", i_name)){
           reg_init_model = glmmTMB(reg~(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp):as.factor(species)+as.factor(species)+0, data = env_obs, family = "nbinom1")
@@ -109,12 +135,35 @@ for(i_dir in directories){
           init_reg_env[is.na(init_reg_env)] = 0
         }
 
-        init_growth_env[init_growth_env > 5] = 5
-        init_growth_env[init_growth_env < -5] = -5
-        init_mort_env[init_mort_env > 5] = 5
-        init_mort_env[init_mort_env < -5] = -5
-        init_reg_env[init_reg_env > 5] = 5
-        init_reg_env[init_reg_env < -5] = -5
+
+        missing_species_growth <- setdiff(1:Nspecies, as.integer(rownames(init_growth_env)))
+        init_growth_env <- rbind(
+          init_growth_env,
+          matrix(0, length(missing_species_growth), ncol(init_growth_env), dimnames = list(missing_species_growth, colnames(init_growth_env)))
+        )
+        init_growth_env <- init_growth_env[order(as.numeric(rownames(init_growth_env))), ]
+
+        missing_species_mort <- setdiff(1:Nspecies, as.integer(rownames(init_mort_env)))
+        init_mort_env <- rbind(
+          init_mort_env,
+          matrix(0, length(missing_species_mort), ncol(init_mort_env), dimnames = list(missing_species_mort, colnames(init_mort_env)))
+        )
+        init_mort_env <- init_mort_env[order(as.numeric(rownames(init_mort_env))), ]
+
+        missing_species_reg <- setdiff(1:Nspecies, as.integer(rownames(init_reg_env)))
+        init_reg_env <- rbind(
+          init_reg_env,
+          matrix(0, length(missing_species_reg), ncol(init_reg_env), dimnames = list(missing_species_reg, colnames(init_reg_env)))
+        )
+        init_reg_env <- init_reg_env[order(as.numeric(rownames(init_reg_env))), ]
+
+        max_vals = 3
+        init_growth_env[init_growth_env > max_vals] = max_vals
+        init_growth_env[init_growth_env < -max_vals] = -max_vals
+        init_mort_env[init_mort_env > max_vals] = max_vals
+        init_mort_env[init_mort_env < -max_vals] = -max_vals
+        init_reg_env[init_reg_env > max_vals] = max_vals
+        init_reg_env[init_reg_env < -max_vals] = -max_vals
 
         obsNA = unlist(strsplit(response, ".", fixed = TRUE))
         for(i_lossvar in all_lossvars[!(all_lossvars %in% obsNA)]){
@@ -134,7 +183,7 @@ for(i_dir in directories){
         cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = Nspecies)
 
         Nsites = length(unique(obs_dt$siteID))
-        batchsize = ceiling((Nsites)/2) # TODO change back
+        batchsize = ceiling(((Nsites)/2)*0.8) # TODO change back
         Npatches = uniqueN(cohorts_dt$patchID)
 
         m1$fit(data = obs_dt, batchsize = batchsize, env = env_dt, init_cohort = cohort1,  epochs = Nepochs, patches = Npatches, lr = 0.01, checkpoints = 5L,
@@ -152,6 +201,6 @@ for(i_dir in directories){
       }
   })
   # }
-}
+# }
 parallel::stopCluster(cl)
 cat("\nscript finished")
