@@ -41,8 +41,8 @@ parallel::clusterEvalQ(cl, {
   library(glmmTMB)
 })
 
-i_cv= cv_variants[1]
-i_dir = directories[7]
+i_cv= cv_variants[197]
+i_dir = directories[3]
 for(i_dir in directories){
   parallel::clusterExport(cl, varlist = list("i_dir"), envir = environment())
   .null = parLapply(cl, cv_variants, function(i_cv){
@@ -51,6 +51,7 @@ for(i_dir in directories){
     response = tstrsplit(i_cv, "_", fixed = TRUE)[[3]][1]
     i_name = basename(i_dir)
 
+    if(!file.exists(paste0("results/","02_simulated/",i_name,"_",i_cv,".pt"))) {
 
     myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
     dist = cbind(nodes,0:3)
@@ -151,5 +152,6 @@ for(i_dir in directories){
     rm(m1)
     gc()
     torch::cuda_empty_cache()
+    }
   })
 }
