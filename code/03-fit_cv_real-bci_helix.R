@@ -1,3 +1,19 @@
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+## get index of array ####
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) < 1) {
+  stop("No batch index provided. Please provide a batch index as an argument.")
+}
+batch_index <- as.integer(args[1])
+# Each batch contains 4 indices; for example, batch 1 -> 1:4, batch 2 -> 5:8, etc.
+subset_indices <- (((batch_index - 1) * 4) + 1):(batch_index * 4)
+if(max(subset_indices) > 36) {
+  stop("Batch index exceeds available task indices (1:36).")
+}
+cat("Running batch index:", batch_index, "\n")
+cat("Processing tasks with indices:", paste(subset_indices, collapse = ", "), "\n")
+
 library(data.table)
 library(FINN)
 library(torch)
@@ -20,11 +36,11 @@ cv_variants <- paste0(rep(fold_names,each = length(unlist(lossvars_comb))),"_",u
 
 directories <- list.files("data/BCI/CVsplits-realdata", full.names = T)
 
-directories <- directories[grepl("1patch", directories)]
+directories <- directories[grepl("1patch", directories) & grepl("1patch", directories)]
 directories = rev(directories)
 
-cl = parallel::makeCluster(16L)
-nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
+cl = parallel::makeCluster(8L)
+# nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
 parallel::clusterEvalQ(cl, {
   library(data.table)
@@ -48,21 +64,19 @@ cat("\nscript started")
 all_variants = list()
 for(i_dir in directories){
   for(i_cv in cv_variants){
-    # all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = cv_variants)))
-    i_name = basename(i_dir)
-    out_dir = paste0("results/","02_realdata/",i_name,"_",i_cv,".pt")
-    if(!file.exists(out_dir)) all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = i_cv)))
+    all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = i_cv)))
   }
 }
-
+# Process only the subset for this batch
+.selected_variants <- all_variants[subset_indices]
 
 # i_dir = directories[3]
 # i_cv = cv_variants[15]
 cat("\nscript started")
 # for(i_dir in directories){
 # for(i_cv in cv_variants){
-parallel::clusterExport(cl, varlist = c("i_dir", ls(envir = .GlobalEnv)), envir = environment())
-.null = parLapply(cl, all_variants, function(i_var){
+parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environment())
+.null = parLapply(cl, .selected_variants, function(i_var){
   i_dir = i_var$i_dir
   i_cv = i_var$cv_variants
   cv_S = tstrsplit(i_cv, "_", fixed = TRUE)[[1]][1]
@@ -76,11 +90,11 @@ parallel::clusterExport(cl, varlist = c("i_dir", ls(envir = .GlobalEnv)), envir 
 
     # cat(paste("Starting", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
 
-    myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
-    dist = cbind(nodes,0:3)
-    dev = as.integer(as.numeric(dist[which(dist[,1] %in% myself, arr.ind = TRUE), 2]))
+    # myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
+    # dist = cbind(nodes,0:3)
+    # dev = as.integer(as.numeric(dist[which(dist[,1] %in% myself, arr.ind = TRUE), 2]))
 
-    Sys.setenv(CUDA_VISIBLE_DEVICES=dev)
+    # Sys.setenv(CUDA_VISIBLE_DEVICES=dev)
 
     cat("\nread data:", i_name)
     cat("\nCV variant:", i_cv)
