@@ -84,3 +84,7 @@
  [6] "graphics"   "grDevices"  "utils"      "datasets"   "methods"   
 [11] "base"      
 
+Error in checkForRemoteErrors(val) : 
+  3 nodes produced errors; first error: missing value where TRUE/FALSE needed
+Calls: parLapply ... clusterApply -> staticClusterApply -> checkForRemoteErrors
+Execution halted
