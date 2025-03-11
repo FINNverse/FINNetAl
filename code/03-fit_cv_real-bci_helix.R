@@ -7,7 +7,7 @@ if (length(args) < 1) {
 }
 batch_index <- as.integer(args[1])
 # Each batch contains 4 indices; for example, batch 1 -> 1:4, batch 2 -> 5:8, etc.
-subset_indices <- (((batch_index - 1) * 4) + 1):(batch_index * 4)
+subset_indices <- (((batch_index - 1) * 2) + 1):(batch_index * 2)
 if(max(subset_indices) > 36) {
   stop("Batch index exceeds available task indices (1:36).")
 }
@@ -39,7 +39,7 @@ directories <- list.files("data/BCI/CVsplits-realdata", full.names = T)
 directories <- directories[grepl("1patch", directories) & grepl("genus", directories)]
 directories = rev(directories)
 
-cl = parallel::makeCluster(8L)
+cl = parallel::makeCluster(2L)
 # nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
 parallel::clusterEvalQ(cl, {
@@ -47,6 +47,7 @@ parallel::clusterEvalQ(cl, {
   library(FINN)
   library(torch)
   library(glmmTMB)
+  torch::torch_set_num_threads(4)
 })
 
 # for(i_dir in directories){
