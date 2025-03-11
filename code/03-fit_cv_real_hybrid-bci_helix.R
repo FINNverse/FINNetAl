@@ -5,6 +5,7 @@ args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 1) {
   stop("No batch index provided. Please provide a batch index as an argument.")
 }
+batch_index <- 1
 batch_index <- as.integer(args[1])
 # Each batch contains 4 indices; for example, batch 1 -> 1:4, batch 2 -> 5:8, etc.
 subset_indices <- (((batch_index - 1) * 2) + 1):(batch_index * 2)
@@ -122,62 +123,59 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
 
     env_obs = merge(obs_dt, env_dt, by = c('year', "siteID"))
     ## get init parameters ####
-    ### growth ####
     if(grepl("genus",i_name)){
+    ### growth ####
       env_obs$species_fac <- as.factor(env_obs$species)
       growth_init_model = glmmTMB(log(growth+1)~1+Prec+SR_kW_m2+RH_prc+T_max+T_min+swp+(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp||species_fac), data = env_obs, family = gaussian())
       init_growth_env <- as.matrix(coef(growth_init_model)[[1]][[1]])
       init_growth_env[is.na(init_growth_env)] = 0
-    }else if(grepl("pft", i_name)){
-      growth_init_model = lm(log(growth+1)~(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp):as.factor(species)+as.factor(species)+0, data = env_obs)
-      init_growth_env = matrix(coefficients(growth_init_model), Nspecies, Nenv+1)
-      init_growth_env[is.na(init_growth_env)] = 0
-    }
     ### mort ####
-    if(grepl("genus",i_name)){
       env_obs$Fmort = scales::rescale(env_obs$mort, c(0.0001, 1-0.0001))
       env_obs$species_fac <- as.factor(env_obs$species)
       mort_init_model = glmmTMB(Fmort~1+Prec+SR_kW_m2+RH_prc+T_max+T_min+swp+(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp||species_fac), data = env_obs, family = beta_family())
       init_mort_env = as.matrix(coef(mort_init_model)[[1]][[1]])
       init_mort_env[is.na(init_mort_env)] = 0
+    ### reg ####
+      reg_init_model = glmmTMB(ceiling(reg)~1+Prec+SR_kW_m2+RH_prc+T_max+T_min+swp+(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp||species_fac), data = env_obs, family = "nbinom1")
+      init_reg_env = as.matrix(coef(reg_init_model)[[1]][[1]])
+
+      ### fix missing species ####
+      init_reg_env[is.na(init_reg_env)] = 0
+      missing_species_growth <- setdiff(1:Nspecies, as.integer(rownames(init_growth_env)))
+      init_growth_env <- rbind(
+        init_growth_env,
+        matrix(0, length(missing_species_growth), ncol(init_growth_env), dimnames = list(missing_species_growth, colnames(init_growth_env)))
+      )
+      init_growth_env <- init_growth_env[order(as.numeric(rownames(init_growth_env))), ]
+
+      missing_species_mort <- setdiff(1:Nspecies, as.integer(rownames(init_mort_env)))
+      init_mort_env <- rbind(
+        init_mort_env,
+        matrix(0, length(missing_species_mort), ncol(init_mort_env), dimnames = list(missing_species_mort, colnames(init_mort_env)))
+      )
+      init_mort_env <- init_mort_env[order(as.numeric(rownames(init_mort_env))), ]
+
+      missing_species_reg <- setdiff(1:Nspecies, as.integer(rownames(init_reg_env)))
+      init_reg_env <- rbind(
+        init_reg_env,
+        matrix(0, length(missing_species_reg), ncol(init_reg_env), dimnames = list(missing_species_reg, colnames(init_reg_env)))
+      )
+      init_reg_env <- init_reg_env[order(as.numeric(rownames(init_reg_env))), ]
     }else if(grepl("pft", i_name)){
+    ### growth ####
+      growth_init_model = lm(log(growth+1)~(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp):as.factor(species)+as.factor(species)+0, data = env_obs)
+      init_growth_env = matrix(coefficients(growth_init_model), Nspecies, Nenv+1)
+      init_growth_env[is.na(init_growth_env)] = 0
+    ### mort ####
       env_obs$Fmort = scales::rescale(env_obs$mort, c(0.0001, 1-0.0001))
       mort_init_model = glmmTMB(Fmort~(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp):as.factor(species)+as.factor(species)+0, data = env_obs, family = beta_family())
       init_mort_env = matrix(summary(mort_init_model)$coefficients$cond[,1], Nspecies, Nenv+1)
       init_mort_env[is.na(init_mort_env)] = 0
-    }
     ### reg ####
-    if(grepl("genus",i_name)){
-      reg_init_model = glmmTMB(ceiling(reg)~1+Prec+SR_kW_m2+RH_prc+T_max+T_min+swp+(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp||species_fac), data = env_obs, family = "nbinom1")
-      init_reg_env = as.matrix(coef(reg_init_model)[[1]][[1]])
-      init_reg_env[is.na(init_reg_env)] = 0
-    }else if(grepl("pft", i_name)){
       reg_init_model = glmmTMB(reg~(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp):as.factor(species)+as.factor(species)+0, data = env_obs, family = "nbinom1")
       init_reg_env = matrix(summary(reg_init_model)$coefficients$cond[,1], Nspecies, Nenv+1)
       init_reg_env[is.na(init_reg_env)] = 0
     }
-
-
-    missing_species_growth <- setdiff(1:Nspecies, as.integer(rownames(init_growth_env)))
-    init_growth_env <- rbind(
-      init_growth_env,
-      matrix(0, length(missing_species_growth), ncol(init_growth_env), dimnames = list(missing_species_growth, colnames(init_growth_env)))
-    )
-    init_growth_env <- init_growth_env[order(as.numeric(rownames(init_growth_env))), ]
-
-    missing_species_mort <- setdiff(1:Nspecies, as.integer(rownames(init_mort_env)))
-    init_mort_env <- rbind(
-      init_mort_env,
-      matrix(0, length(missing_species_mort), ncol(init_mort_env), dimnames = list(missing_species_mort, colnames(init_mort_env)))
-    )
-    init_mort_env <- init_mort_env[order(as.numeric(rownames(init_mort_env))), ]
-
-    missing_species_reg <- setdiff(1:Nspecies, as.integer(rownames(init_reg_env)))
-    init_reg_env <- rbind(
-      init_reg_env,
-      matrix(0, length(missing_species_reg), ncol(init_reg_env), dimnames = list(missing_species_reg, colnames(init_reg_env)))
-    )
-    init_reg_env <- init_reg_env[order(as.numeric(rownames(init_reg_env))), ]
 
     max_vals = 3
     init_growth_env[init_growth_env > max_vals] = max_vals
