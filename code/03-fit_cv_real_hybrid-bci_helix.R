@@ -8,9 +8,6 @@ if (length(args) < 1) {
 batch_index <- as.integer(args[1])
 # Each batch contains 4 indices; for example, batch 1 -> 1:4, batch 2 -> 5:8, etc.
 subset_indices <- (((batch_index - 1) * 2) + 1):(batch_index * 2)
-if(max(subset_indices) > 36) {
-  stop("Batch index exceeds available task indices (1:36).")
-}
 cat("Running batch index:", batch_index, "\n")
 cat("Processing tasks with indices:", paste(subset_indices, collapse = ", "), "\n")
 
@@ -19,9 +16,6 @@ library(FINN)
 library(torch)
 library(glmmTMB)
 library(parallel)
-
-# logfile <- "log_03-fit_cv_real-bci.txt"
-# if(file.exists(logfile)) file.remove(logfile)
 
 Nepochs = 8000
 overwrite = F
@@ -36,19 +30,8 @@ cv_variants <- paste0(rep(fold_names,each = length(unlist(lossvars_comb))),"_",u
 
 directories <- list.files("data/BCI/CVsplits-realdata", full.names = T)
 
-directories <- directories[grepl("1patch", directories) & grepl("genus", directories)]
+# directories <- directories[grepl("1patch", directories) & grepl("genus", directories)]
 directories = rev(directories)
-
-cl = parallel::makeCluster(2L)
-# nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
-parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
-parallel::clusterEvalQ(cl, {
-  library(data.table)
-  library(FINN)
-  library(torch)
-  library(glmmTMB)
-  torch::torch_set_num_threads(4)
-})
 
 # for(i_dir in directories){
 #   for(i_cv in cv_variants){
@@ -68,14 +51,38 @@ for(i_dir in directories){
     all_variants = c(all_variants, list(list(i_dir = i_dir, cv_variants = i_cv)))
   }
 }
+
+
+if(min(subset_indices) > length(all_variants)) {
+  stop("Batch index exceeds available task indices (1:length(all_variants)).")
+}
+subset_indices <- subset_indices[subset_indices < length(all_variants)]
+
 # Process only the subset for this batch
 .selected_variants <- all_variants[subset_indices]
+if(any(grepl("genus",unlist(.selected_variants)))){
+  cl = parallel::makeCluster(2L)
+}else{
+  cl = parallel::makeCluster(4L)
+}
+
+# nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
+parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
+parallel::clusterEvalQ(cl, {
+  library(data.table)
+  library(FINN)
+  library(torch)
+  library(glmmTMB)
+  torch::torch_set_num_threads(4)
+})
+
 
 # i_dir = directories[3]
 # i_cv = cv_variants[15]
 cat("\nscript started")
 # for(i_dir in directories){
 # for(i_cv in cv_variants){
+i_var = .selected_variants[[1]]
 parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environment())
 .null = parLapply(cl, .selected_variants, function(i_var){
   i_dir = i_var$i_dir
