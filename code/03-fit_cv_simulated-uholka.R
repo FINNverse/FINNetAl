@@ -42,7 +42,7 @@ parallel::clusterEvalQ(cl, {
 })
 
 i_cv= cv_variants[1]
-i_dir = directories[1]
+i_dir = directories[4]
 for(i_dir in directories){
   parallel::clusterExport(cl, varlist = list("i_dir"), envir = environment())
   .null = parLapply(cl, cv_variants, function(i_cv){
@@ -101,30 +101,6 @@ for(i_dir in directories){
     init_reg_env[is.na(init_reg_env)] = 0
     init_reg_env[abs(init_reg_env) > 2 & init_reg_env < 0] = -2
     init_reg_env[abs(init_reg_env) > 2 & init_reg_env > 0] = 2
-
-
-
-    missing_species_growth <- setdiff(1:Nspecies, as.integer(rownames(init_growth_env)))
-    init_growth_env <- rbind(
-      init_growth_env,
-      matrix(0, length(missing_species_growth), ncol(init_growth_env), dimnames = list(missing_species_growth, colnames(init_growth_env)))
-    )
-    init_growth_env <- init_growth_env[order(as.numeric(rownames(init_growth_env))), ]
-
-    missing_species_mort <- setdiff(1:Nspecies, as.integer(rownames(init_mort_env)))
-    init_mort_env <- rbind(
-      init_mort_env,
-      matrix(0, length(missing_species_mort), ncol(init_mort_env), dimnames = list(missing_species_mort, colnames(init_mort_env)))
-    )
-    init_mort_env <- init_mort_env[order(as.numeric(rownames(init_mort_env))), ]
-
-    missing_species_reg <- setdiff(1:Nspecies, as.integer(rownames(init_reg_env)))
-    init_reg_env <- rbind(
-      init_reg_env,
-      matrix(0, length(missing_species_reg), ncol(init_reg_env), dimnames = list(missing_species_reg, colnames(init_reg_env)))
-    )
-    init_reg_env <- init_reg_env[order(as.numeric(rownames(init_reg_env))), ]
-
 
     obsNA = unlist(strsplit(response, ".", fixed = TRUE))
     for(i_lossvar in all_lossvars[!(all_lossvars %in% obsNA)]){
