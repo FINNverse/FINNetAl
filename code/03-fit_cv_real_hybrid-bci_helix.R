@@ -5,7 +5,7 @@ args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 1) {
   stop("No batch index provided. Please provide a batch index as an argument.")
 }
-batch_index <- 1
+# batch_index <- 50
 batch_index <- as.integer(args[1])
 # Each batch contains 4 indices; for example, batch 1 -> 1:4, batch 2 -> 5:8, etc.
 subset_indices <- (((batch_index - 1) * 2) + 1):(batch_index * 2)
@@ -61,12 +61,8 @@ subset_indices <- subset_indices[subset_indices < length(all_variants)]
 
 # Process only the subset for this batch
 .selected_variants <- all_variants[subset_indices]
-if(any(grepl("genus",unlist(.selected_variants)))){
-  cl = parallel::makeCluster(2L)
-}else{
-  cl = parallel::makeCluster(4L)
-}
 
+cl = parallel::makeCluster(2L)
 # nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
 parallel::clusterEvalQ(cl, {
@@ -74,7 +70,7 @@ parallel::clusterEvalQ(cl, {
   library(FINN)
   library(torch)
   library(glmmTMB)
-  torch::torch_set_num_threads(4)
+  torch::torch_set_num_threads(8)
 })
 
 
@@ -83,7 +79,7 @@ parallel::clusterEvalQ(cl, {
 cat("\nscript started")
 # for(i_dir in directories){
 # for(i_cv in cv_variants){
-i_var = .selected_variants[[1]]
+# i_var = .selected_variants[[1]]
 parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environment())
 .null = parLapply(cl, .selected_variants, function(i_var){
   i_dir = i_var$i_dir
@@ -200,20 +196,19 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
       regeneration_process = createProcess(~., initEnv = list(init_reg_env), func = FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
       mortality_process = createProcess(~., initEnv = list(init_mort_env), func = FINN::mortality, optimizeSpecies = TRUE, optimizeEnv = TRUE)
     )
-
     gh = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
       g = self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred)$relu()
       return(g)
     }
     m1$growth_func = m1$.__enclos_env__$private$set_environment(gh)
 
-    ## fit model ####
     cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = Nspecies)
 
     Nsites = length(unique(obs_dt$siteID))
     batchsize = ceiling(((Nsites)/2)*0.8) # TODO change back
     Npatches = uniqueN(cohorts_dt$patchID)
 
+    source("code/99_cohort500fix.R")
     m1$fit(data = obs_dt, batchsize = batchsize, env = env_dt, init_cohort = cohort1,  epochs = Nepochs, patches = Npatches, lr = 0.01, checkpoints = 5L,
            optimizer = torch::optim_ignite_adam, device = "gpu", record_gradients = FALSE,weights = c(0.1, 10, 1.0, 10.0, 1, 1), plot_progress = FALSE,
            loss= c(dbh = "mse", ba = "mse", trees = "nbinom", growth = "mse", mortality = "mse", regeneration = "nbinom")
