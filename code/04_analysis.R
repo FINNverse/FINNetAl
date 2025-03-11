@@ -4,7 +4,8 @@ library(ggh4x)
 library(FINN)
 library(torch)
 
-result_folders = c("02_realdata", "02_simulated")
+result_folders = c("02_realdata", "02_simulated", "02_realdata_hybrid")
+# result_folders = c("02_realdata_hybrid")
 # get current git hash
 git_hash <- system("git rev-parse --short HEAD", intern = TRUE)
 
@@ -19,6 +20,9 @@ if(!file.exists(paste0("results/pred_list_",git_hash,".rds"))){
     }else if(i_result_folder == "02_simulated"){
       split_location = "CVsplits-simdata/"
       simreal = "sim"
+    }else if(i_result_folder == "02_realdata_hybrid"){
+      split_location = "CVsplits-realdata/"
+      simreal = "realhybrid"
     }
 
     files_list = list.files(path = paste0("results/", i_result_folder,"/"), pattern = "*.pt", full.names = TRUE)
@@ -26,16 +30,16 @@ if(!file.exists(paste0("results/pred_list_",git_hash,".rds"))){
     # files_list = files_list[grepl("T0", files_list)]
 
     # Read all files
-    m_list <- lapply(files_list, torch::torch_load)
-    names(m_list) <- gsub(".pt","", basename(files_list))
+    # m_list <- lapply(files_list, torch::torch_load)
+    names(files_list) <- gsub(".pt","", basename(files_list))
 
     # i=4
     i = 1
-    for(i in 1:length(m_list)){
-      m = m_list[[i]]
-      name = names(m_list)[i]
+    for(i in 1:length(files_list)){
+      m = torch::torch_load(files_list[i])
+      name = names(files_list)[i]
       folder = strsplit(name,"_")[[1]][1]
-      cat("\r", i, "of", length(m_list), "start model:", name, "                                          ")
+      cat("\r", i, "of", length(files_list), "start model:", name, "                                          ")
       if(!grepl("species", folder)) dataset = "BCI"
       if(grepl("species", folder)) dataset = "Uholka"
       files_dir = paste0("data/",dataset,"/",split_location,folder,"/")
@@ -73,10 +77,13 @@ if(!file.exists(paste0("results/pred_list_",git_hash,".rds"))){
           test = obs_dt_test
           )
         )
+      rm(m)
+      gc()
     }
   }
   saveRDS(pred_list, paste0("results/pred_list_",git_hash,".rds"))
 }else{
+  # pred_list <- readRDS(paste0("results/pred_list_aed8443.rds"))
   pred_list <- readRDS(paste0("results/pred_list_",git_hash,".rds"))
 }
 
@@ -174,10 +181,6 @@ cors_dt1_all =
     N = .N
   ), by = .(variable, cv, spatial_holdout, temporal_holdout, test_train, scale, response, simreal, dataset)]
 
-cors_dt1_all[is.infinite(pearson_r)]
-cors_dt1_all[is.na(pearson_r)]
-cors_dt1_all[is.na(spearmans_r)]
-
 cors_dt1_species =
   pred_dt[!is.na(obs) & !is.na(pred),.(
     rmse = sqrt(mean((pred - obs)^2, na.rm = T)),
@@ -226,7 +229,8 @@ cors_dt[, ylabels := forcats::fct_reorder(ylabels, N_dots),]
 cors_dt[,variable := factor(variable, levels = c("ba","trees", "dbh", "growth", "mort", "reg"), labels = c("ba","trees", "dbh", "growth", "mort", "reg")),]
 
 for(i_species in c("overall", "species")){
-  for(i_dataset in c("BCI", "Uholka")){
+  # for(i_dataset in c("BCI", "Uholka")){
+  for(i_dataset in c("BCI")){
     # p_dat_s = cors_dt[spatial_holdout == T & temporal_holdout == F & dataset == i_dataset]
     p_dat_s = cors_dt[spatial_holdout == T & temporal_holdout == F & dataset == i_dataset & species_cor == i_species]
     p_dat_s$holdout = "spatial"
@@ -256,7 +260,8 @@ for(i_species in c("overall", "species")){
       xlab("predicted variable")+
       ylab("response variables")
     p_all
-    ggsave(paste0("figures/fits_",i_dataset,"_",i_species,".png"), p_all, width = 12, height = 10)
+    # ggsave(paste0("figures/fits_",i_dataset,"_",i_species,".png"), p_all, width = 12, height = 10)
+    ggsave(paste0("figures/testfits_",i_dataset,"_",i_species,".png"), p_all, width = 12, height = 10)
   }
 }
 
