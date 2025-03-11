@@ -51,6 +51,8 @@ for(i_dir in directories){
     response = tstrsplit(i_cv, "_", fixed = TRUE)[[3]][1]
     i_name = basename(i_dir)
 
+    if(!file.exists(paste0("results/","02_simulated/",i_name,"_",i_cv,".pt"))) {
+
 
     myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
     dist = cbind(nodes,0:1)
@@ -82,23 +84,46 @@ for(i_dir in directories){
     growth_init_model = lm(log(growth+1)~(Tmax+Tmin+Psum+Psd+awc):as.factor(species)+as.factor(species)+0, data = env_obs)
     init_growth_env = matrix(coefficients(growth_init_model), Nspecies, Nenv+1)
     init_growth_env[is.na(init_growth_env)] = 0
-    init_growth_env[abs(init_growth_env) > 5 & init_growth_env < 0] = -5
-    init_growth_env[abs(init_growth_env) > 5 & init_growth_env > 0] = 5
+    init_growth_env[abs(init_growth_env) > 2 & init_growth_env < 0] = -2
+    init_growth_env[abs(init_growth_env) > 2 & init_growth_env > 0] = 2
 
     ### mort ####
     env_obs$Fmort = scales::rescale(env_obs$mort, c(0.0001, 1-0.0001))
     mort_init_model = glmmTMB(Fmort~(Tmax+Tmin+Psum+Psd+awc):as.factor(species)+as.factor(species)+0, data = env_obs, family = beta_family())
     init_mort_env = matrix(summary(mort_init_model)$coefficients$cond[,1], Nspecies, Nenv+1)
     init_mort_env[is.na(init_mort_env)] = 0
-    init_mort_env[abs(init_mort_env) > 5 & init_mort_env < 0] = -5
-    init_mort_env[abs(init_mort_env) > 5 & init_mort_env > 0] = 5
+    init_mort_env[abs(init_mort_env) > 2 & init_mort_env < 0] = -2
+    init_mort_env[abs(init_mort_env) > 2 & init_mort_env > 0] = 2
 
     ### reg ####
     reg_init_model = glmmTMB(reg~(Tmax+Tmin+Psum+Psd++awc):as.factor(species)+as.factor(species)+0, data = env_obs, family = "nbinom1")
     init_reg_env = matrix(summary(reg_init_model)$coefficients$cond[,1], Nspecies, Nenv+1)
     init_reg_env[is.na(init_reg_env)] = 0
-    init_reg_env[abs(init_reg_env) > 5 & init_reg_env < 0] = -5
-    init_reg_env[abs(init_reg_env) > 5 & init_reg_env > 0] = 5
+    init_reg_env[abs(init_reg_env) > 2 & init_reg_env < 0] = -2
+    init_reg_env[abs(init_reg_env) > 2 & init_reg_env > 0] = 2
+
+
+
+    missing_species_growth <- setdiff(1:Nspecies, as.integer(rownames(init_growth_env)))
+    init_growth_env <- rbind(
+      init_growth_env,
+      matrix(0, length(missing_species_growth), ncol(init_growth_env), dimnames = list(missing_species_growth, colnames(init_growth_env)))
+    )
+    init_growth_env <- init_growth_env[order(as.numeric(rownames(init_growth_env))), ]
+
+    missing_species_mort <- setdiff(1:Nspecies, as.integer(rownames(init_mort_env)))
+    init_mort_env <- rbind(
+      init_mort_env,
+      matrix(0, length(missing_species_mort), ncol(init_mort_env), dimnames = list(missing_species_mort, colnames(init_mort_env)))
+    )
+    init_mort_env <- init_mort_env[order(as.numeric(rownames(init_mort_env))), ]
+
+    missing_species_reg <- setdiff(1:Nspecies, as.integer(rownames(init_reg_env)))
+    init_reg_env <- rbind(
+      init_reg_env,
+      matrix(0, length(missing_species_reg), ncol(init_reg_env), dimnames = list(missing_species_reg, colnames(init_reg_env)))
+    )
+    init_reg_env <- init_reg_env[order(as.numeric(rownames(init_reg_env))), ]
 
 
     obsNA = unlist(strsplit(response, ".", fixed = TRUE))
@@ -134,5 +159,6 @@ for(i_dir in directories){
     rm(m1)
     gc()
     torch::cuda_empty_cache()
+    }
   })
 }
