@@ -8,7 +8,8 @@ if (length(args) < 1) {
 # batch_index <- 50
 batch_index <- as.integer(args[1])
 # Each batch contains 4 indices; for example, batch 1 -> 1:4, batch 2 -> 5:8, etc.
-subset_indices <- (((batch_index - 1) * 2) + 1):(batch_index * 2)
+jobs_per_process = 1
+subset_indices <- (((batch_index - 1) * jobs_per_process) + 1):(batch_index * jobs_per_process)
 cat("Running batch index:", batch_index, "\n")
 cat("Processing tasks with indices:", paste(subset_indices, collapse = ", "), "\n")
 
@@ -62,7 +63,7 @@ subset_indices <- subset_indices[subset_indices < length(all_variants)]
 # Process only the subset for this batch
 .selected_variants <- all_variants[subset_indices]
 
-cl = parallel::makeCluster(2L)
+cl = parallel::makeCluster(1L)
 # nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
 parallel::clusterEvalQ(cl, {
@@ -70,7 +71,7 @@ parallel::clusterEvalQ(cl, {
   library(FINN)
   library(torch)
   library(glmmTMB)
-  torch::torch_set_num_threads(8)
+  torch::torch_set_num_threads(16)
 })
 
 

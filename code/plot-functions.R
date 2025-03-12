@@ -460,8 +460,14 @@ build_model_dt <- function(pt_file) {
   final_dt[, trees.pred_before := shift(trees.pred, 1, type = "lag"), by = .(siteID,species,test_train)]
   final_dt[trees.obs_before == 0 & trees.obs == 0, ":="(mort.obs = NA, growth.obs = NA),]
   final_dt[trees.pred_before == 0 & trees.pred == 0, ":="(mort.pred = NA, growth.pred = NA),]
-  final_dt[,reg.pred := r_mean_ha,]
-  final_dt <- final_dt[,-c("holdout", "splitID", "trees.obs_before", "trees.pred_before","siteID_holdout","r_mean_ha", "period_length")]
+  if("r_mean_ha" %in% names(final_dt)){
+    final_dt[,reg.pred := r_mean_ha,]
+    final_dt <- final_dt[,-c("holdout", "splitID", "trees.obs_before", "trees.pred_before","siteID_holdout","r_mean_ha")]
+  }else{
+    final_dt[, reg.pred := r_mean_ha.x,]
+    final_dt[, reg.obs := r_mean_ha.y,]
+    final_dt <- final_dt[,-c("holdout", "splitID", "trees.obs_before", "trees.pred_before","siteID_holdout","r_mean_ha.x","r_mean_ha.y")]
+  }
 
   # Clean up large objects
   rm(m, pred_train, pred_test,

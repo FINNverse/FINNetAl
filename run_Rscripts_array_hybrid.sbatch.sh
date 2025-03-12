@@ -10,7 +10,7 @@
 #SBATCH --mail-user=yannek.kaeber@biom.uni-freiburg.de
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:1
-#SBATCH --array=1-72
+#SBATCH --array=1-144
 
 ################################################################################
 # USAGE EXAMPLE:

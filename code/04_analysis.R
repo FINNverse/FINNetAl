@@ -17,36 +17,41 @@ all_models <- c(
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 
 noCV_models = all_models[grepl("S0_T0", all_models)]
-pdf("figures/01-results_noCV.pdf", width = 15, height = 10)
+pdf("figures/02-results_noCV.pdf", width = 15, height = 10)
 all_cors_dt <- data.table()
 all_cors_dt_plot <- data.table()
+i = noCV_models[1]
 for(i in noCV_models){
   cat("\nstarting", i,"\n", which(i == noCV_models), "of", length(noCV_models))
   pred_dt = build_model_dt(i)
   all_dt = pred_dt[[1]]
   name = names(pred_dt)[1]
-
+  period_length = unique(all_dt[!is.na(period_length)]$period_length)
+  all_dt <- all_dt[,-c("period_length")]
   # aggregate species by pft
   if(grepl("genus",name)){
-    species_dt <- fread("data/BCI/data-cleaning/genus/species_assigned.csv")
-    all_dt2 <- merge(all_dt, unique(species_dt[,.(species = speciesID, pft = PFT_2axes)]), by = "species", all.x = T, allow.cartesian = T)
-    all_dt2[,species := pft,]
-    all_dt2 <- all_dt2[,-c("pft")]
-    all_dt2[,.(
-      ba.pred = sum(ba.pred, na.rm = T),
-      ba.obs = sum(ba.obs, na.rm = T),
-      trees.pred = sum(trees.pred, na.rm = T),
-      trees.obs = sum(trees.obs, na.rm = T),
-      dbh.pred = mean(dbh.pred, na.rm = T),
-      dbh.obs = mean(dbh.obs, na.rm = T),
-      growth.pred = mean(growth.pred, na.rm = T),
-      growth.obs = mean(growth.obs, na.rm = T),
-      mort.pred = mean(mort.pred, na.rm = T),
-      mort.obs = mean(mort.obs, na.rm = T),
-      reg.pred = mean(reg.pred, na.rm = T),
-      reg.obs = mean(reg.obs, na.rm = T)
-    ), by = .(siteID,year,species,test_train)]
+    # species_dt <- fread("data/BCI/data-cleaning/genus/species_assigned.csv")
+    # all_dt2 <- merge(all_dt, unique(species_dt[,.(species = speciesID, pft = PFT_2axes)]), by = "species", all.x = T, allow.cartesian = T)
+    # all_dt2[,species := pft,]
+    # all_dt2 <- all_dt2[,-c("pft")]
+    # all_dt2[,.(
+    #   ba.pred = sum(ba.pred, na.rm = T),
+    #   ba.obs = sum(ba.obs, na.rm = T),
+    #   trees.pred = sum(trees.pred, na.rm = T),
+    #   trees.obs = sum(trees.obs, na.rm = T),
+    #   dbh.pred = sum(dbh.pred*trees.pred, na.rm = T)/sum(trees.pred, na.rm = T),
+    #   dbh.obs = sum(dbh.obs*trees.obs, na.rm = T)/sum(trees.obs, na.rm = T),
+    #   growth.pred = sum(growth.pred*trees.pred, na.rm = T)/sum(trees.pred, na.rm = T),
+    #   growth.obs = sum(growth.obs*trees.obs, na.rm = T)/sum(trees.obs, na.rm = T),
+    #   mort.pred = sum(mort.pred*trees.pred, na.rm = T)/sum(trees.pred, na.rm = T),
+    #   mort.obs = sum(mort.obs*trees.obs, na.rm = T)/sum(trees.obs, na.rm = T),
+    #   reg.pred = sum(reg.pred*trees.pred, na.rm = T)/sum(trees.pred, na.rm = T),
+    #   reg.obs = sum(reg.obs*trees.obs, na.rm = T)/sum(trees.obs, na.rm = T)
+    # ), by = .(siteID,year,species,test_train)]
+    top10_ba_species <- all_dt[,.(ba = sum(ba.obs,na.rm = T)), by = .(species)][order(-ba)][1:10]$species
+    all_dt2 <- all_dt
   }else{
+    top10_ba_species = unique(all_dt$species)
     all_dt2 <- all_dt
   }
   all_dt2 <- melt(all_dt2, id.vars = c("siteID","year","species","test_train"))
@@ -54,7 +59,7 @@ for(i in noCV_models){
   all_dt2[grepl("obs",variable), pred_obs := "obs",]
   all_dt2[, variable := gsub(".obs|.pred","",variable),]
 
-  p_dat <- all_dt2[,.(value = mean(value,na.rm = T)), by = .(year,species,test_train, pred_obs, variable)]
+  p_dat <- all_dt2[species %in% top10_ba_species,.(value = mean(value,na.rm = T)), by = .(year,species,test_train, pred_obs, variable)]
   p1 = ggplot(p_dat[test_train == "train"], aes(x = year, y = value))+
     geom_point(aes(shape = pred_obs, color = factor(species), size = pred_obs), alpha = 0.5)+
     geom_line(data = p_dat[test_train == "train" & !is.na(value)],  aes(linetype = pred_obs, color = factor(species)))+
@@ -64,15 +69,34 @@ for(i in noCV_models){
     scale_size_manual(values = c(3,1))
   print(p1)
 
-  cor_dt_in <- dcast(all_dt2[,.(
-    value = mean(value,na.rm = T)
-    ), by = .(siteID,year,species,test_train,variable,pred_obs)],
-    siteID+year+species+test_train+variable~pred_obs, value.var = "value")
-  cor_dt_in_plot <- dcast(all_dt2[,.(
-    value = mean(value,na.rm = T)
-    ), by = .(year,species,test_train,variable,pred_obs)],
-    year+species+test_train+variable~pred_obs, value.var = "value")
+  cor_agg <- all_dt2[test_train == "train"]
+  if(period_length > 1){
+    cor_agg[,periodID := as.integer(as.factor(year))]
+    cor_agg[is.na(value)]
+    years = unique(cor_agg$year)
+    periods = rep(seq(1, uniqueN(cor_agg$year)/period_length, by = 1), each = period_length)
+    periods_year = rep(seq(period_length, max(cor_agg$year), by = period_length), each = period_length)
+    cor_agg[,periods_year := as.integer(as.character(factor(year, levels = years, labels = periods_year)))]
+    cor_agg[,periodID := as.integer(factor(year, levels = years, labels = periods))]
+    cor_agg2 <-
+      rbindlist(
+        list(
+        cor_agg[variable %in% c("ba", "dbh", "trees") & periods_year == year,.(value = mean(value,na.rm = T)), by= .(siteID,periodID,species,test_train, pred_obs, variable)],
+        cor_agg[variable %in% c("reg"), .(value = sum(value, na.rm = T)), .(siteID,periodID,species,test_train, pred_obs,variable)],
+        cor_agg[variable %in% c("mort","growth"), .(value = mean(value, na.rm = T)), .(siteID,periodID,species,test_train, pred_obs, variable)]
+        )
+      )
+  }else{
+    cor_agg2 <- cor_agg[, .(value = mean(value,na.rm = T)),.(siteID,periodID = year,species,test_train, pred_obs, variable)]
+  }
+  cor_dt_in <- dcast(cor_agg2,
+    siteID+periodID+species+test_train+variable~pred_obs, value.var = "value")
 
+
+  cor_dt_in_plot <- dcast(cor_agg2[,.(
+    value = mean(value,na.rm = T)
+    ), by = .(periodID,species,test_train,variable,pred_obs)],
+    periodID+species+test_train+variable~pred_obs, value.var = "value")
   cor_dt <-
     cor_dt_in[!is.na(obs) & !is.na(pred) & test_train == "train",.(
       rmse = sqrt(mean((pred - obs)^2, na.rm = T)),
@@ -81,6 +105,13 @@ for(i in noCV_models){
       pred_center = sum(range(pred, na.rm = T)/2),
       N = .N
     ), by = .(variable, test_train)]
+  cor_dt_species <- cor_dt_in[!is.na(obs) & !is.na(pred) & test_train == "train",.(
+      rmse = sqrt(mean((pred - obs)^2, na.rm = T)),
+      spearmans_r = cor(pred, obs, method = "spearman"),
+      obs_center = sum(range(obs, na.rm = T))/2,
+      pred_center = sum(range(pred, na.rm = T)/2),
+      N = .N
+    ), by = .(variable,species, test_train)]
   cor_dt_plot <-
     cor_dt_in_plot[!is.na(obs) & !is.na(pred) & test_train == "train",.(
       rmse = sqrt(mean((pred - obs)^2, na.rm = T)),
@@ -89,24 +120,64 @@ for(i in noCV_models){
       pred_center = sum(range(pred, na.rm = T)/2),
       N = .N
     ), by = .(variable, test_train)]
+  cor_dt_plot_species <-
+    cor_dt_in_plot[!is.na(obs) & !is.na(pred) & test_train == "train",.(
+      rmse = sqrt(mean((pred - obs)^2, na.rm = T)),
+      spearmans_r = cor(pred, obs, method = "spearman"),
+      obs_center = sum(range(obs, na.rm = T))/2,
+      pred_center = sum(range(pred, na.rm = T)/2),
+      N = .N
+    ), by = .(variable,species, test_train)]
 
-  p2 = ggplot(cor_dt_in, aes(x = pred, y = obs, color = factor(species)))+
+
+  p2a = ggplot(cor_dt_in[species %in% top10_ba_species], aes(x = pred, y = obs, color = factor(species)))+
     geom_point(alpha = 0.1)+
     geom_smooth(method = "lm")+
-    facet_wrap(~variable, scales = "free")+
-    ggtitle(name)+
+    facet_wrap(~variable, scales = "free", ncol = 2)+
+    ggtitle(paste0("per site: ",name))+
     geom_abline(intercept = 0, slope = 1, color = "black", linetype = "dashed")+
-    theme_minimal()
-  print(p2)
-
-  p3 = ggplot(cor_dt_in_plot, aes(x = pred, y = obs, color = factor(species)))+
-    geom_point(alpha = 0.1)+
+    theme_minimal()+
+    theme(legend.position = "bottom")
+  # print(p2a)
+  cor_dt_species <- rbind(
+    data.table(cor_dt, species = "overall"),
+    cor_dt_species, fill = T
+  )
+  p2b = ggplot(cor_dt_species[species %in% top10_ba_species], aes(y = species, x = variable))+
+    geom_tile(aes(fill = spearmans_r), color = "white", linewidth = 3)+
+    scale_fill_gradient(low = "white", high = "red", limits = c(0,1))+
+    geom_text(aes(label = round(spearmans_r,2)), size = 3, color = "black")+
+    facet_wrap(~test_train)+
+    theme_classic()+
+    ggtitle(paste0("per site and species: ",name))
+  # print(p2b)
+  # arrange p2a and p2b
+  gridExtra::grid.arrange(p2a, p2b, ncol = 2)
+  p3a = ggplot(cor_dt_in_plot[species %in% top10_ba_species], aes(x = pred, y = obs, color = factor(species)))+
+    geom_point(alpha = 0.8)+
     geom_smooth(method = "lm")+
     facet_wrap(~variable, scales = "free")+
-    ggtitle(name)+
+    ggtitle(paste0("whole plot: ",name))+
     geom_abline(intercept = 0, slope = 1, color = "black", linetype = "dashed")+
-    theme_minimal()
-  print(p3)
+    theme_minimal()+
+    theme(legend.position = "bottom")
+  # print(p3)
+  cor_dt_plot_species <- rbind(
+    data.table(cor_dt_plot, species = "overall"),
+    cor_dt_plot_species, fill = T
+  )
+  p3b = ggplot(cor_dt_plot_species[species %in% top10_ba_species], aes(y = species, x = variable))+
+    geom_tile(aes(fill = spearmans_r), color = "white", linewidth = 3)+
+    scale_fill_gradient(low = "white", high = "red", limits = c(0,1))+
+    geom_text(aes(label = round(spearmans_r,2)), size = 3, color = "black")+
+    facet_wrap(~test_train)+
+    theme_classic()+
+    ggtitle(paste0("whole plot and species: ",name))
+  # print(p3b)
+  # arrange p3a and p3b
+  gridExtra::grid.arrange(p3a, p3b, ncol = 2)
+  ## per species
+
   cor_dt[,":="(name = basename(name), data = basename(dirname(name)))]
   cor_dt_plot[,":="(name = basename(name), data = basename(dirname(name)))]
   all_cors_dt <- rbind(all_cors_dt, cor_dt)
@@ -130,10 +201,130 @@ p5 = ggplot(all_cors_dt_plot, aes(y = paste(data,name), x = variable))+
 print(p5)
 dev.off()
 
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+## correlations for all combinations ####
+#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+gc()
+all_models <- c(
+  list.files("results/02_simulated/", full.names = T, recursive = T),
+  list.files("results/02_realdata/", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybrid/", full.names = T, recursive = T)
+)
 
-#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-## ####
-#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+all_cors_dt <- data.table()
+all_cors_dt_plot <- data.table()
+all_cors_dt_species <- data.table()
+all_cors_dt_plot_species <- data.table()
+for(i in all_models){
+  cat("\n", which(i == all_models), "of", length(all_models),"\nstarting", i, "\n")
+  pred_dt = build_model_dt(i)
+  all_dt = pred_dt[[1]]
+  name = names(pred_dt)[1]
+  if(grepl("period35",name) | grepl("period15",name)){
+    period_length = 5
+  }else{
+    period_length = 1
+  }
+  all_dt <- all_dt[,-c("period_length")]
+
+  all_dt <- melt(all_dt, id.vars = c("siteID","year","species","test_train"))
+  all_dt[grepl("pred",variable), pred_obs := "pred",]
+  all_dt[grepl("obs",variable), pred_obs := "obs",]
+  all_dt[, variable := gsub(".obs|.pred","",variable),]
+
+  cor_agg <- all_dt
+  if(period_length > 1){
+    cor_agg[,periodID := as.integer(as.factor(year))]
+    cor_agg[is.na(value)]
+    years = unique(cor_agg$year)
+    periods = rep(seq(1, uniqueN(cor_agg$year)/period_length, by = 1), each = period_length)
+    periods_year = rep(seq(period_length, max(cor_agg$year), by = period_length), each = period_length)
+    cor_agg[,periods_year := as.integer(as.character(factor(year, levels = years, labels = periods_year)))]
+    cor_agg[,periodID := as.integer(factor(year, levels = years, labels = periods))]
+    cor_agg2 <-
+      rbindlist(
+        list(
+          cor_agg[variable %in% c("ba", "dbh", "trees") & periods_year == year,.(value = mean(value,na.rm = T)), by= .(siteID,periodID,species,test_train, pred_obs, variable)],
+          cor_agg[variable %in% c("reg"), .(value = sum(value, na.rm = T)), .(siteID,periodID,species,test_train, pred_obs,variable)],
+          cor_agg[variable %in% c("mort","growth"), .(value = mean(value, na.rm = T)), .(siteID,periodID,species,test_train, pred_obs, variable)]
+        )
+      )
+  }else{
+    cor_agg2 <- cor_agg[, .(value = mean(value,na.rm = T)),.(siteID,periodID = year,species,test_train, pred_obs, variable)]
+  }
+  cor_dt_in <- dcast(cor_agg2,siteID+periodID+species+test_train+variable~pred_obs, value.var = "value")
+
+  cor_dt_in_plot <- dcast(cor_agg2[,.(
+    value = mean(value,na.rm = T)
+    ),by = .(periodID,species,test_train,variable,pred_obs)],
+    periodID+species+test_train+variable~pred_obs, value.var = "value")
+  cor_dt <-
+    cor_dt_in[!is.na(obs) & !is.na(pred) & test_train == "train",.(
+      rmse = sqrt(mean((pred - obs)^2, na.rm = T)),
+      spearmans_r = cor(pred, obs, method = "spearman"),
+      obs_center = sum(range(obs, na.rm = T))/2,
+      pred_center = sum(range(pred, na.rm = T)/2),
+      N = .N
+    ), by = .(variable, test_train)]
+  cor_dt_species <- cor_dt_in[!is.na(obs) & !is.na(pred) & test_train == "train",.(
+    rmse = sqrt(mean((pred - obs)^2, na.rm = T)),
+    spearmans_r = cor(pred, obs, method = "spearman"),
+    obs_center = sum(range(obs, na.rm = T))/2,
+    pred_center = sum(range(pred, na.rm = T)/2),
+    N = .N
+  ), by = .(variable,species, test_train)]
+  cor_dt_plot <-
+    cor_dt_in_plot[!is.na(obs) & !is.na(pred) & test_train == "train",.(
+      rmse = sqrt(mean((pred - obs)^2, na.rm = T)),
+      spearmans_r = cor(pred, obs, method = "spearman"),
+      obs_center = sum(range(obs, na.rm = T))/2,
+      pred_center = sum(range(pred, na.rm = T)/2),
+      N = .N
+    ), by = .(variable, test_train)]
+  cor_dt_plot_species <-
+    cor_dt_in_plot[!is.na(obs) & !is.na(pred) & test_train == "train",.(
+      rmse = sqrt(mean((pred - obs)^2, na.rm = T)),
+      spearmans_r = cor(pred, obs, method = "spearman"),
+      obs_center = sum(range(obs, na.rm = T))/2,
+      pred_center = sum(range(pred, na.rm = T)/2),
+      N = .N
+    ), by = .(variable,species, test_train)]
+
+  cor_dt[,":="(name = basename(name), data = basename(dirname(name)))]
+  cor_dt_plot[,":="(name = basename(name), data = basename(dirname(name)))]
+  cor_dt_species[,":="(name = basename(name), data = basename(dirname(name)))]
+  cor_dt_plot_species[,":="(name = basename(name), data = basename(dirname(name)))]
+  all_cors_dt <- rbind(all_cors_dt, cor_dt)
+  all_cors_dt_plot <- rbind(all_cors_dt_plot, cor_dt_plot)
+  all_cors_dt_species <- rbind(all_cors_dt_species, cor_dt_species)
+  all_cors_dt_plot_species <- rbind(all_cors_dt_plot_species, cor_dt_plot_species)
+  rm(cor_dt, cor_dt_plot, cor_dt_species, cor_dt_plot_species, all_dt, pred_dt, cor_agg, cor_agg2)
+  gc()
+}
+fwrite(all_cors_dt, "results/all_cors_dt.csv")
+fwrite(all_cors_dt_plot, "results/all_cors_dt_plot.csv")
+fwrite(all_cors_dt_species, "results/all_cors_dt_species.csv")
+fwrite(all_cors_dt_plot_species, "results/all_cors_dt_plot_species.csv")
+
+# p4 = ggplot(all_cors_dt, aes(y = paste(data,name), x = variable))+
+#   geom_tile(aes(fill = spearmans_r), color = "white", linewidth = 3)+
+#   scale_fill_gradient(low = "white", high = "red", limits = c(0,1))+
+#   geom_text(aes(label = round(spearmans_r,2)), size = 3, color = "black")+
+#   facet_wrap(~test_train)+
+#   theme_classic()+
+#   ggtitle("per site")
+# print(p4)
+# p5 = ggplot(all_cors_dt_plot, aes(y = paste(data,name), x = variable))+
+#   geom_tile(aes(fill = spearmans_r), color = "white", linewidth = 3)+
+#   scale_fill_gradient(low = "white", high = "red", limits = c(0,1))+
+#   geom_text(aes(label = round(spearmans_r,2)), size = 3, color = "black")+
+#   facet_wrap(~test_train)+
+#   theme_classic()+
+#   ggtitle("whole plot")
+# print(p5)
+
+
+
 
 #
 # all_dt2 <- dcast(
