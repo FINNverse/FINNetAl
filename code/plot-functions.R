@@ -311,3 +311,169 @@ plot_simulated_data <- function(models,
     overall_cors = overall_cors_all
   )
 }
+
+
+library(data.table)
+library(torch)
+library(FINN)
+
+library(data.table)
+library(torch)
+library(FINN)
+
+build_model_dt <- function(pt_file) {
+  # -------------------------------------------------------------------------
+  # 1) Load the .pt model
+  # -------------------------------------------------------------------------
+  cat("\nLoading model:", pt_file, "\n")
+  m <- torch_load(pt_file)
+
+  # -------------------------------------------------------------------------
+  # 2) Infer where to read CSV data from
+  # -------------------------------------------------------------------------
+  model_dir       <- dirname(pt_file)       # e.g. "results/02_simulated"
+  i_result_folder <- basename(model_dir)    # e.g. "02_simulated"
+
+  # Decide how to handle real vs sim vs hybrid
+  if (i_result_folder == "02_realdata") {
+    split_location <- "CVsplits-realdata/"
+  } else if (i_result_folder == "02_simulated") {
+    split_location <- "CVsplits-simdata/"
+  } else if (i_result_folder == "02_realdata_hybrid") {
+    split_location <- "CVsplits-realdata/"
+  } else {
+    stop("Unrecognized folder name: '", i_result_folder,
+         "'. Please handle logic for new folder names.")
+  }
+
+  # Parse the filename (e.g. "sp1_t1_ba.pt")
+  model_name <- gsub("\\.pt$", "", basename(pt_file))
+  parts <- tstrsplit(model_name, "_", fixed = TRUE)
+
+  folder  <- parts[[1]][1]             # e.g. "sp1"
+  dataset <- if (!grepl("species", folder)) "BCI" else "Uholka"
+
+  data_dir <- file.path("data", dataset, split_location, folder)
+
+  # Suppose you use 4 parts: <folder>_<cv_S>_<cv_T>_<response>
+  cv_S <- parts[[2]][1]
+  cv_T <- parts[[3]][1]
+
+  # -------------------------------------------------------------------------
+  # 3) Read the CSV files (wide obs, environment, cohorts)
+  # -------------------------------------------------------------------------
+  cat("Reading observation and environment data...\n")
+  obs_dt_train <- fread(file.path(data_dir, paste0("obs_dt_", cv_S, "_", cv_T, "_train.csv")))
+  obs_dt_test  <- fread(file.path(data_dir, paste0("obs_dt_", cv_S, "_", cv_T, "_test.csv")))
+
+  env_dt_train <- fread(file.path(data_dir, paste0("env_dt_", cv_S, "_", cv_T, "_train.csv")))
+  env_dt_train <- env_dt_train[, !c("splitID", "holdout", "siteID_holdout"), with = FALSE]
+  env_dt_test  <- fread(file.path(data_dir, paste0("env_dt_", cv_S, "_", cv_T, "_test.csv")))
+  env_dt_test  <- env_dt_test[, !c("splitID", "holdout", "siteID_holdout"), with = FALSE]
+
+  cohorts_dt_train <- fread(file.path(data_dir, paste0("initial_cohorts_", cv_S, "_", cv_T, "_train.csv")))
+  cohorts_dt_test  <- fread(file.path(data_dir, paste0("initial_cohorts_", cv_S, "_", cv_T, "_test.csv")))
+
+  Nspecies <- max(obs_dt_train$species)
+  Npatches <- max(cohorts_dt_train$patchID)
+
+  cohorts_train <- FINN::CohortMat(cohorts_dt_train, sp = Nspecies)
+  cohorts_test  <- FINN::CohortMat(cohorts_dt_test,  sp = Nspecies)
+
+  # -------------------------------------------------------------------------
+  # 4) Simulate predictions (FINN automatically provides a wide version)
+  # -------------------------------------------------------------------------
+  cat("Simulating predictions...\n")
+  pred_train <- m$simulate(env = env_dt_train, init_cohort = cohorts_train, patches = Npatches)
+  pred_test  <- m$simulate(env = env_dt_test,  init_cohort = cohorts_test,  patches = Npatches)
+
+  # `pred_train$wide$site` and `pred_test$wide$site` are already wide
+  pred_train_wide <- pred_train$wide$site
+  pred_test_wide  <- pred_test$wide$site
+
+  # -------------------------------------------------------------------------
+  # 5) Merge wide predictions with wide observations (train)
+  # -------------------------------------------------------------------------
+  # We'll rename predicted columns with ".pred" suffix, observed columns with ".obs".
+  # We assume obs_dt_train is also wide: siteID, year, species, ba, dbh, growth, mort, trees, reg, etc.
+
+  # Copy so we can rename
+  pred_train_wide <- copy(pred_train_wide)
+  obs_train_wide  <- copy(obs_dt_train)
+
+  # Identify measurement columns to rename
+  measure_cols <- c("ba", "dbh", "growth", "mort", "trees", "reg")
+  # Some FINN sims have exactly these columns – adapt if yours differ
+
+  # Rename predicted columns => e.g. "ba" => "ba.pred"
+  old_names_pred <- measure_cols
+  new_names_pred <- paste0(measure_cols, ".pred")
+  setnames(pred_train_wide, old_names_pred, new_names_pred, skip_absent = TRUE)
+
+  # Rename observed columns => e.g. "ba" => "ba.obs"
+  old_names_obs <- measure_cols
+  new_names_obs <- paste0(measure_cols, ".obs")
+  setnames(obs_train_wide, old_names_obs, new_names_obs, skip_absent = TRUE)
+
+  # Merge on (siteID, year, species) – adapt if your data uses other keys
+  train_merged <- merge(
+    pred_train_wide,
+    obs_train_wide,
+    by = c("siteID", "year", "species"),
+    all = TRUE
+  )
+  train_merged[, test_train := "train"]
+
+  # If predicted reg is NA => set to 0
+  if ("reg.pred" %in% names(train_merged)) {
+    train_merged[is.na(reg.pred), reg.pred := 0]
+  }
+
+  # -------------------------------------------------------------------------
+  # 6) Merge wide predictions with wide observations (test)
+  # -------------------------------------------------------------------------
+  pred_test_wide <- copy(pred_test_wide)
+  obs_test_wide  <- copy(obs_dt_test)
+
+  setnames(pred_test_wide, old_names_pred, new_names_pred, skip_absent = TRUE)
+  setnames(obs_test_wide,  old_names_obs,  new_names_obs,  skip_absent = TRUE)
+
+  test_merged <- merge(
+    pred_test_wide,
+    obs_test_wide,
+    by = c("siteID", "year", "species"),
+    all = TRUE
+  )
+  test_merged[, test_train := "test"]
+
+  if ("reg.pred" %in% names(test_merged)) {
+    test_merged[is.na(reg.pred), reg.pred := 0]
+  }
+
+  # -------------------------------------------------------------------------
+  # 7) Combine train + test
+  # -------------------------------------------------------------------------
+  cat("Combining train + test sets...\n")
+  final_dt <- rbindlist(list(train_merged, test_merged), use.names = TRUE)
+
+  final_dt[, trees.obs_before := shift(trees.obs, 1, type = "lag"), by = .(siteID,species,test_train)]
+  final_dt[, trees.pred_before := shift(trees.pred, 1, type = "lag"), by = .(siteID,species,test_train)]
+  final_dt[trees.obs_before == 0 & trees.obs == 0, ":="(mort.obs = NA, growth.obs = NA),]
+  final_dt[trees.pred_before == 0 & trees.pred == 0, ":="(mort.pred = NA, growth.pred = NA),]
+  final_dt[,reg.pred := r_mean_ha,]
+  final_dt <- final_dt[,-c("holdout", "splitID", "trees.obs_before", "trees.pred_before","siteID_holdout","r_mean_ha", "period_length")]
+
+  # Clean up large objects
+  rm(m, pred_train, pred_test,
+     pred_train_wide, obs_train_wide,
+     pred_test_wide,  obs_test_wide,
+     train_merged, test_merged)
+  gc()
+
+  # -------------------------------------------------------------------------
+  # 8) Return a named list with exactly one entry: { pt_file = final_dt }
+  # -------------------------------------------------------------------------
+  ret_list <- list()
+  ret_list[[pt_file]] <- final_dt
+  return(ret_list)
+}
