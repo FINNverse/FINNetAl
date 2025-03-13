@@ -5,7 +5,7 @@ args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 1) {
   stop("No batch index provided. Please provide a batch index as an argument.")
 }
-# batch_index <- 50
+batch_index <- 42
 batch_index <- as.integer(args[1])
 # Each batch contains 4 indices; for example, batch 1 -> 1:4, batch 2 -> 5:8, etc.
 jobs_per_process = 1
@@ -18,6 +18,8 @@ library(FINN)
 library(torch)
 library(glmmTMB)
 library(parallel)
+
+transformer = FALSE
 
 Nepochs = 8000
 overwrite = F
@@ -80,7 +82,7 @@ parallel::clusterEvalQ(cl, {
 cat("\nscript started")
 # for(i_dir in directories){
 # for(i_cv in cv_variants){
-# i_var = .selected_variants[[1]]
+#i_var = .selected_variants[[1]]
 parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environment())
 .null = parLapply(cl, .selected_variants, function(i_var){
   i_dir = i_var$i_dir
@@ -187,7 +189,7 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
       obs_dt[[i_lossvar]] = NA_real_
     }
 
-    hybrid_growth = createHybrid(~., transformer = TRUE, emb_dim = 16L,dropout = 0.1)
+    hybrid_growth = createHybrid(~., transformer = transformer, emb_dim = 16L,dropout = 0.1)
 
     ## create model ####
     m1 = finn(
@@ -197,8 +199,9 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
       regeneration_process = createProcess(~., initEnv = list(init_reg_env), func = FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
       mortality_process = createProcess(~., initEnv = list(init_mort_env), func = FINN::mortality, optimizeSpecies = TRUE, optimizeEnv = TRUE)
     )
+
     gh = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
-      g = self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred)$relu()
+      g = (self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred) - exp(1))$exp()
       return(g)
     }
     m1$growth_func = m1$.__enclos_env__$private$set_environment(gh)
