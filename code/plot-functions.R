@@ -339,7 +339,7 @@ build_model_dt <- function(pt_file) {
     split_location <- "CVsplits-realdata/"
   } else if (i_result_folder == "02_simulated") {
     split_location <- "CVsplits-simdata/"
-  } else if (i_result_folder == "02_realdata_hybrid") {
+  } else if (grepl("02_realdata_hybrid",i_result_folder)) {
     split_location <- "CVsplits-realdata/"
   } else {
     stop("Unrecognized folder name: '", i_result_folder,
