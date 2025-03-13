@@ -5,7 +5,7 @@ args <- commandArgs(trailingOnly = TRUE)
 if (length(args) < 1) {
   stop("No batch index provided. Please provide a batch index as an argument.")
 }
-# batch_index <- 5
+# batch_index <- 10
 batch_index <- as.integer(args[1])
 # Each batch contains 4 indices; for example, batch 1 -> 1:4, batch 2 -> 5:8, etc.
 jobs_per_process = 2L
@@ -83,7 +83,7 @@ parallel::clusterEvalQ(cl, {
 cat("\nscript started")
 # for(i_dir in directories){
 # for(i_cv in cv_variants){
-i_var = .selected_variants[[1]]
+# i_var = .selected_variants[[2]]
 parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environment())
 .null = parLapply(cl, .selected_variants, function(i_var){
   i_dir = i_var$i_dir
@@ -183,7 +183,7 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
       init_reg_env[is.na(init_reg_env)] = 0
     }
 
-    max_vals = 1.5
+    max_vals = 1
     init_growth_env[init_growth_env > max_vals] = max_vals
     init_growth_env[init_growth_env < -max_vals] = -max_vals
     init_mort_env[init_mort_env > max_vals] = max_vals

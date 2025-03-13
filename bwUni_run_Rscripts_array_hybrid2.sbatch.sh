@@ -10,41 +10,32 @@
 #SBATCH --mail-user=yannek.kaeber@biom.uni-freiburg.de # Your email for notifications
 #SBATCH --mem=100G
 #SBATCH --gres=gpu:1
+#SBATCH --array=1-32
 
 ################################################################################
 # USAGE EXAMPLE:
-#   sbatch run_torch_script.sh /path/to/your_script.R "1-10"
+#   sbatch run_torch_script.sh /path/to/your_script.R
 #
-# The second argument (optional) specifies job indexes for the array.
+# This script will run that R script inside the Singularity container.
 ################################################################################
 
-# 1) Check that at least one argument (R script path) is provided
-if [ "$#" -lt 1 ]; then
-  echo "Usage: sbatch $0 <path_to_your_R_script> [array_indexes]"
-  exit 1
+# 1) Check that an R script path was provided
+if [ "$#" -ne 1 ]; then
+echo "Usage: sbatch $0 <path_to_your_R_script>"
+exit 1
 fi
 
 RSCRIPT_PATH="$1"
 
-# 2) Check if a second argument is provided (defines Slurm array indexes)
-if [ -n "$2" ]; then
-  JOB_ARRAY_INDEXES="$2"
-else
-  JOB_ARRAY_INDEXES="1-32"  # Default array range
-fi
-
-# 3) Set Slurm array dynamically
-#SBATCH --array=${JOB_ARRAY_INDEXES}
-
-# 4) Load Singularity/Apptainer (adjust module as needed)
+# 2) Load Singularity/Apptainer (adjust module as needed)
 #module load system/singularity/3.11.3
 
-# 5) (Optional) Set environment variables or simpler locale
+# 3) (Optional) Set environment variables or simpler locale
 export LANG=C.UTF-8
 export LC_ALL=C.UTF-8
 export R_PROFILE_USER=/dev/null
 
-# 6) Run the container with GPU support, passing the job array index to the R script
+# 4) Run the container with GPU support, passing the job array index to the R script
 singularity exec --nv ~/finn-r-torch.sif Rscript "$RSCRIPT_PATH" "$SLURM_ARRAY_TASK_ID"
 
 # (Optional) For interactive usage (commented out):
