@@ -97,7 +97,7 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
   obsNA = unlist(strsplit(response, ".", fixed = TRUE))
 
   i_name = basename(i_dir)
-  out_dir = paste0("results/","02_realdata_hybrid2/",i_name,"_",i_cv,".pt")
+  out_dir = paste0("results/","02_realdata_hybrid",tf,"/",i_name,"_",cv_S,"_",cv_T,".pt")
   stopifnot(length(overwrite) > 0)
   stopifnot(length(all_lossvars) > 0)
   stopifnot(sum(all_lossvars %in% obsNA) > 0)
