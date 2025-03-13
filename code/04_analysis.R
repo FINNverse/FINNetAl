@@ -19,6 +19,7 @@ all_models <- c(
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 
 noCV_models = all_models[grepl("S0_T0", all_models)]
+noCV_models = all_models#[grepl("S0_T0", all_models)]
 for(i_train in c("test","train")){
   cairo_pdf(paste0("figures/",i_train,"02-results_noCV.pdf"), width = 12, height = 7)
   all_cors_dt <- data.table()
