@@ -206,12 +206,6 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
       mortality_process = hybrid_mort
     )
 
-    gh = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
-      g = (self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred) - exp(1))$exp()
-      return(g)
-    }
-    m1$growth_func = m1$.__enclos_env__$private$set_environment(gh)
-
     cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = Nspecies)
 
     Nsites = length(unique(obs_dt$siteID))
