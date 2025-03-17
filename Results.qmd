@@ -1,0 +1,146 @@
+---
+title: "Results"
+format: 
+  docx:
+    reference-doc: figures-doc.docx
+    keep-md: false
+    fig-format: svg
+crossref:
+  fig-title: '**Figure**'
+  fig-labels: arabic
+  tbl-title: '**Table**'
+  tbl-labels: arabic
+  title-delim: ":"
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(dev = "cairo_pdf")
+knitr::opts_chunk$set(fig.path="figures/", echo = FALSE)
+```
+
+
+
+
+```{r}
+#| echo: false
+#| message: false
+library(ggplot2)
+library(data.table)
+source("code/plot-functions.R")
+
+# library(igraph)
+# library(Cairo)
+# source("utils.R")
+
+```
+
+## Results
+
+### Model fit
+
+```{r}
+#| echo: false
+#| message: false
+
+chosen_scale = "pft-period7-25patches"
+
+fig3models <- c(
+    list.files("results/02_realdata/", full.names = T, recursive = T, pattern = chosen_scale),
+    list.files("results/02_realdata_hybridTF1/", full.names = T, recursive = T, pattern = chosen_scale)
+)
+
+## create fit simulations
+fig3models_fit <- fig3models[grepl("S0_T0",fig3models)]
+fit_process = build_model_dt(pt_file = fig3models_fit[1])[[1]]
+fit_hybrid = build_model_dt(pt_file = fig3models_fit[2])[[1]]
+all_dt = rbind(
+  data.table(fit_process[test_train == "train"], type = "process"),
+  data.table(fit_hybrid[test_train == "train"], type = "hybrid")
+)
+period_length = unique(all_dt[!is.na(period_length)]$period_length)
+all_dt <- all_dt[,-c("period_length")]
+
+all_dt2 <- melt(all_dt, id.vars = c("type","siteID","year","species","test_train"))
+all_dt2[grepl("pred",variable), pred_obs := "pred",]
+all_dt2[grepl("obs",variable), pred_obs := "obs",]
+all_dt2[, variable := gsub(".obs|.pred","",variable),]
+
+p_dat <- all_dt2[test_train == "train",.(value = mean(value,na.rm = T)), by = .(type,year,species,test_train, pred_obs, variable)]
+p_dat2 <- p_dat[!is.na(value)]
+
+
+# create cv simulations
+fig3models_cv <- fig3models[!grepl("S0_T0",fig3models) & grepl("T0",fig3models)]
+cors_fullPlot = fread("results/cors_fullPlot.csv")
+cors_fullPlot <- cors_fullPlot[scale == chosen_scale,]
+
+```
+
+```{r}
+#| label: fig-Fig_3
+#| fig-format: svg
+#| fig-width: 8
+#| fig-height: 12
+#| echo: false
+#| message: false
+#| fig-cap: "Bias on effect estimates for different ML algorithms in three different simulated causal simulations (a and b). Sample sizes are so large that stochastic effects can be excluded (1000 observations and 500 repetitions). Effects of the ML models were inferred using average conditional effects. Row a) shows results for simulations with uncorrelated predictors with effect sizes ($\\beta_1$=1.0,  $\\beta_2$=0.0, and $\\beta_3$=1.0). Row b) shows the results for simulations with X~1~ and X~2~ being strongly correlated (Pearson correlation factor = 0.9) but only X~1~ affects y."
+
+vars = c("ba", "trees", "dbh", "reg","growth","mort")
+var_labels = c("basal area [m^2/ha]", "tree density [trees/ha]", "dbh [cm]", "regeneration density [trees/ha]", "growth [m^3/ha/yr]", "mortality [m3/ha/yr]")
+
+p_dat2[,variable2 := factor(
+  variable, 
+  levels = vars,
+  labels = var_labels),]
+
+cors_fullPlot[data == "02_realdata_hybridTF1",type := "hybrid",]
+cors_fullPlot[data == "02_realdata",type := "process",]
+cors_fullPlot[, type := factor(type, levels = c("process", "hybrid"), ordered = T),]
+cors_fullPlot <- cors_fullPlot[!is.na(type)]
+
+p_list <- list()
+for(i in 1:length(vars)){
+  for(j_type in c("process","hybrid")){
+    i_var = vars[i]
+    i_var_label = var_labels[i]
+    i_pdat = p_dat2[type == j_type & variable == i_var]
+    p1 = ggplot(i_pdat, aes(x = year, y = value))+
+      geom_point(aes(shape = pred_obs, color = factor(species), size = pred_obs), alpha = 0.5)+
+      geom_line(data = i_pdat,  aes(linetype = pred_obs, color = factor(species)))+
+      geom_line(aes(linetype = pred_obs, color = factor(species)))+
+      # facet_wrap(type,scales = "free_y", ncol = 2)+
+      scale_size_manual(values = c(3,1))+
+      theme_classic()+theme(legend.position = "none")+
+      labs(x = "Inventory Period", y =i_var_label)
+    p_list[[j_type]][[i_var]][["lineplot"]] <- p1
+    
+      
+    }
+    p2 = ggplot(cors_fullPlot[variable == i_var], aes(x = type, y = spearmans_r))+
+      geom_boxplot()+
+      labs(x = "", y = "R")+
+      theme_classic()+
+      coord_cartesian(ylim = c(-1,1))+theme(legend.position = "none")
+    p_list[["cv_cor"]][[i_var]] <- p2
+}
+# load package for textGrob
+library(grid)
+a_label = textGrob("a", x = unit(0.05, "npc"), y = unit(0.95, "npc"), just = c("left", "top"), gp = gpar(fontsize = 16, fontface = "bold"))
+b_label = textGrob("b", x = unit(0.05, "npc"), y = unit(0.95, "npc"), just = c("left", "top"), gp = gpar(fontsize = 16, fontface = "bold"))
+c_label = textGrob("c", x = unit(0.05, "npc"), y = unit(0.95, "npc"), just = c("left", "top"), gp = gpar(fontsize = 16, fontface = "bold"))
+
+gridExtra::grid.arrange(
+  grobs = list(
+    a_label, b_label, c_label,
+    p_list$hybrid$ba$lineplot, p_list$cv_cor$ba, p_list$process$ba$lineplot,
+    p_list$hybrid$dbh$lineplot, p_list$cv_cor$dbh, p_list$process$dbh$lineplot,
+    p_list$hybrid$trees$lineplot, p_list$cv_cor$trees, p_list$process$trees$lineplot,
+    p_list$hybrid$reg$lineplot, p_list$cv_cor$reg, p_list$process$reg$lineplot,
+    p_list$hybrid$growth$lineplot, p_list$cv_cor$growth, p_list$process$growth$lineplot,
+    p_list$hybrid$mort$lineplot, p_list$cv_cor$mort, p_list$process$mort$lineplot
+    ), 
+  # include letters to each plot
+  ncol = 3, widths = c(0.6,0.4,0.6), 
+  heights = c(0.1,0.6,0.6,0.6,0.6,0.6,0.6))
+
+```

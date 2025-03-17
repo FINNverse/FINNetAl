@@ -1,0 +1,50 @@
+---
+title: "README"
+format: gfm
+editor: visual
+bibliography: references.bib
+---
+
+This repository contains the code to reproduce the results in "Hybrid Modelling of Forest Dynamics with Forest-Informed Neural Network (FINN)"
+
+## Scripts 
+
+Scripts to reproduce the analysis can be found in the `code` folder. To rerun everything, run in the following order:
+
+```{r, eval=FALSE}
+source("code/data_preparation/01-bci-data-preparation.R")
+source("code/data_preparation/01-uholka-data-preparation.R")
+source("code/data_preparation/01b-bci-secundary-forest-preparation.R")
+source("code/data_preparation/02-spatial-holdout-folds-bci.R")
+source("code/data_preparation/02-spatial-holdout-folds-uholka.R")
+source("code/01-fit_full_models-bci.R")
+source("code/01-fit_full_models-uholka.R")
+source("code/02-split-data-bci.R")
+source("code/02-split-data-uholka.R")
+source("code/03-fit_cv_real-bci.R")
+source("code/03-fit_cv_real-uholka.R")
+source("code/03-fit_cv_real_hybrid_growth-bci.R")
+source("code/03-fit_cv_real_hybrid_growth-uholka.R")
+source("code/03-fit_cv_real_hybrid_mort-bci.R")
+source("code/03-fit_cv_real_hybrid_mort-uholka.R")
+source("code/04-simulate-fitted-models.R")
+source("code/04-detailled-model-evaluation.R")
+
+```
+
+
+
+# Results
+
+{{< include Results.qmd >}}
+
+# Appendix
+
+{{< include Appendix.qmd >}}
+
+
+## Session info
+
+```{r}
+sessionInfo()
+```
