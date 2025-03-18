@@ -27,10 +27,24 @@ knitr::opts_chunk$set(fig.path="figures/", echo = FALSE)
 library(ggplot2)
 library(data.table)
 source("code/plot-functions.R")
+library(gridExtra)
 
-# library(igraph)
-# library(Cairo)
-# source("utils.R")
+# Function to extract the legend as a grob
+get_legend <- function(ggplot_obj) {
+  # Build the gtable
+  plot_gtable <- ggplot_gtable(ggplot_build(ggplot_obj))
+  
+  # Find the index of the guide box (the legend)
+  guide_index <- which(sapply(plot_gtable$grobs, function(x) x$name) == "guide-box")
+  
+  # Return the legend grob
+  if (length(guide_index) > 0) {
+    return(plot_gtable$grobs[[guide_index]])
+  } else {
+    warning("No legend found.")
+    return(NULL)
+  }
+}
 
 ```
 
@@ -46,7 +60,7 @@ chosen_scale = "pft-period7-25patches"
 
 fig3models <- c(
     list.files("results/02_realdata/", full.names = T, recursive = T, pattern = chosen_scale),
-    list.files("results/02_realdata_hybridTF1/", full.names = T, recursive = T, pattern = chosen_scale)
+    list.files("results/02_realdata_hybridTF0/", full.names = T, recursive = T, pattern = chosen_scale)
 )
 
 ## create fit simulations
@@ -60,6 +74,29 @@ all_dt = rbind(
 period_length = unique(all_dt[!is.na(period_length)]$period_length)
 all_dt <- all_dt[,-c("period_length")]
 
+### species to pft
+# species_dt <- fread("data/BCI/data-cleaning/genus/species_assigned.csv")
+# all_dt2 <- merge(all_dt, unique(species_dt[,.(species = speciesID, pft = PFT_2axes)]), by = "species", all.x = T, allow.cartesian = T)
+# all_dt2[,species := pft,]
+# all_dt2 <- all_dt2[,-c("pft")]
+# all_dt2[,.(
+#   ba.pred = sum(ba.pred, na.rm = T),
+#   ba.obs = sum(ba.obs, na.rm = T),
+#   trees.pred = sum(trees.pred, na.rm = T),
+#   trees.obs = sum(trees.obs, na.rm = T),
+#   dbh.pred = sum(dbh.pred*trees.pred, na.rm = T)/sum(trees.pred, na.rm = T),
+#   dbh.obs = sum(dbh.obs*trees.obs, na.rm = T)/sum(trees.obs, na.rm = T),
+#   growth.pred = sum(growth.pred*trees.pred, na.rm = T)/sum(trees.pred, na.rm = T),
+#   growth.obs = sum(growth.obs*trees.obs, na.rm = T)/sum(trees.obs, na.rm = T),
+#   mort.pred = sum(mort.pred*trees.pred, na.rm = T)/sum(trees.pred, na.rm = T),
+#   mort.obs = sum(mort.obs*trees.obs, na.rm = T)/sum(trees.obs, na.rm = T),
+#   reg.pred = sum(reg.pred*trees.pred, na.rm = T)/sum(trees.pred, na.rm = T),
+#   reg.obs = sum(reg.obs*trees.obs, na.rm = T)/sum(trees.obs, na.rm = T)
+# ), by = .(siteID,year,species,test_train, type)]
+# ###
+
+
+
 all_dt2 <- melt(all_dt, id.vars = c("type","siteID","year","species","test_train"))
 all_dt2[grepl("pred",variable), pred_obs := "pred",]
 all_dt2[grepl("obs",variable), pred_obs := "obs",]
@@ -68,79 +105,232 @@ all_dt2[, variable := gsub(".obs|.pred","",variable),]
 p_dat <- all_dt2[test_train == "train",.(value = mean(value,na.rm = T)), by = .(type,year,species,test_train, pred_obs, variable)]
 p_dat2 <- p_dat[!is.na(value)]
 
+p_dat2_all <- 
+  rbind(
+    p_dat2[variable %in% c("ba", "trees"),.(
+      value = sum(value, na.rm = T),
+      species = "all"
+    ), by = .(type, year, test_train, pred_obs, variable)],
+    p_dat2[variable %in% c("dbh", "reg","growth","mort"),.(
+      value = mean(value, na.rm = T),
+      species = "all"
+    ), by = .(type, year, test_train, pred_obs, variable)]
+  )
+
+p_dat2 <- rbind(
+  p_dat2,
+  p_dat2_all
+)
+
+p_dat2[variable %in% c("ba", "trees"), value := value/0.1,]
+p_dat2[variable %in% c("mortality", "growth"), value := value/5*100,]
+
+
 
 # create cv simulations
-fig3models_cv <- fig3models[!grepl("S0_T0",fig3models) & grepl("T0",fig3models)]
+fig3models_cv <- fig3models[!grepl("S0_T0",fig3models)]
+# fig3models_cv <- fig3models[!grepl("S0_T0",fig3models) & grepl("T0",fig3models)]
+
 cors_fullPlot = fread("results/cors_fullPlot.csv")
-cors_fullPlot <- cors_fullPlot[scale == chosen_scale,]
+cors_fullPlotSpecies <- fread("results/cors_fullPlotSpecies.csv")
+
+all_cors <- rbind(
+  data.table(cors_fullPlot, species = "all"),
+  cors_fullPlotSpecies
+)
+
+all_cors <- all_cors[scale == chosen_scale & grepl("T0", cv),]
+all_cors[data == "02_realdata_hybridTF1",type := "hybrid",]
+all_cors[data == "02_realdata",type := "process",]
+all_cors[, type := factor(type, levels = c("process", "hybrid"), ordered = T),]
+all_cors <- all_cors[!is.na(type)]
+all_cors[,species := factor(species, levels = c(sort(unique(all_cors$species)))),]
 
 ```
 
 ```{r}
 #| label: fig-Fig_3
 #| fig-format: svg
-#| fig-width: 8
-#| fig-height: 12
+#| fig-width: 13
+#| fig-height: 10
 #| echo: false
+#| silent: true
 #| message: false
-#| fig-cap: "Bias on effect estimates for different ML algorithms in three different simulated causal simulations (a and b). Sample sizes are so large that stochastic effects can be excluded (1000 observations and 500 repetitions). Effects of the ML models were inferred using average conditional effects. Row a) shows results for simulations with uncorrelated predictors with effect sizes ($\\beta_1$=1.0,  $\\beta_2$=0.0, and $\\beta_3$=1.0). Row b) shows the results for simulations with X~1~ and X~2~ being strongly correlated (Pearson correlation factor = 0.9) but only X~1~ affects y."
+#| warning: false
+#| fig-cap: "Observed and predicted forest structure and demographic rates for 5 PFTs. a) and b) display the observed values (straight line & crosses) vs the predicted values from the process model (dashed line & circles) and the hybrid model (dotted line & triangles), respectively. c) shows the absolute difference between the observed values and the predictions of the process and hybrid model. d) shows the calculated pearson correlation from the 5 fold blocked spatial cross-validation. The first two rows show the observed and predicted values for basal area and tree density. The third and fourth row show the observed and predicted values for diameter at breast height (dbh), regeneration, growth, and mortality."
+
 
 vars = c("ba", "trees", "dbh", "reg","growth","mort")
-var_labels = c("basal area [m^2/ha]", "tree density [trees/ha]", "dbh [cm]", "regeneration density [trees/ha]", "growth [m^3/ha/yr]", "mortality [m3/ha/yr]")
-
+var_labels <- c(
+  expression(basal~area~(m^2~ha^-1)),
+  expression(trees~(ha^-1)),
+  expression(dbh~(cm)),
+  expression(regeneration~(ha^-1)),
+  expression(growth~(m^3~ha^-1~yr^-1)),
+  expression(mortality~(m^3~ha^-1~yr^-1))
+)
+var_labels2 <- c(
+  "basal~area~(m^2~ha^-1)",
+  "trees~(ha^-1)",
+  "dbh~(cm)",
+  "regeneration~(ha^-5)",
+  "growth~('%'~yr^-1)",
+  "mortality~('%'~yr^-1)"
+)
 p_dat2[,variable2 := factor(
   variable, 
   levels = vars,
-  labels = var_labels),]
+  labels = var_labels2),]
 
-cors_fullPlot[data == "02_realdata_hybridTF1",type := "hybrid",]
-cors_fullPlot[data == "02_realdata",type := "process",]
-cors_fullPlot[, type := factor(type, levels = c("process", "hybrid"), ordered = T),]
-cors_fullPlot <- cors_fullPlot[!is.na(type)]
+p_dat2[, pred_obs2 := factor(pred_obs, levels = c("obs","pred"), labels = c("observation","prediction")) ,]
+
+if(grepl("period35",chosen_scale)){
+  p_dat2[, year2 := 1984+year,]
+}else{
+  p_dat2[, year2 := 1985+year*5,]
+}
+
+p_dat2cast <- dcast(p_dat2, type + year2 + variable2 + species ~ pred_obs2, value.var = "value")
+p_dat2[,type2 := type,]
+p_dat2[pred_obs == "obs",type2 := "observation",]
+p_dat2[,type2 := factor(type2, levels = c("observation", "process", "hybrid"), 
+                        labels = c("Observed", "Predicted (Process Model)", "Predicted (Hybrid Model)")),]
+unique(p_dat2$type2)
+p1_legende_basis =
+  ggplot(p_dat2, aes(x = year2, y = value)) +
+  geom_point(aes(shape = type2, color = factor(species)), size = 3) +
+  geom_line(aes(linetype = type2, color = factor(species))) +
+  scale_shape_manual(values = c(4, 1, 2)) +
+  scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
+  scale_color_manual(name = "PFT", values = c(scales::hue_pal()(5), "black"))+
+  theme_classic()+
+  theme(
+      strip.placement = "outside",        # place strip label fully outside the panel
+      strip.background = element_blank(),     # Remove the facet label box
+      strip.text.y    = element_text(angle = 0),
+      strip.text.x = element_blank(),
+      legend.position = "bottom",
+      legend.title.position = "left"
+    ) +
+    guides(
+      shape = guide_legend(position = "bottom", direction = "vertical", title = "Observation / Model Type"),
+      linetype = guide_legend(position = "bottom",direction = "vertical", title = "Observation / Model Type")
+      )
 
 p_list <- list()
-for(i in 1:length(vars)){
-  for(j_type in c("process","hybrid")){
-    i_var = vars[i]
-    i_var_label = var_labels[i]
-    i_pdat = p_dat2[type == j_type & variable == i_var]
-    p1 = ggplot(i_pdat, aes(x = year, y = value))+
-      geom_point(aes(shape = pred_obs, color = factor(species), size = pred_obs), alpha = 0.5)+
-      geom_line(data = i_pdat,  aes(linetype = pred_obs, color = factor(species)))+
-      geom_line(aes(linetype = pred_obs, color = factor(species)))+
-      # facet_wrap(type,scales = "free_y", ncol = 2)+
-      scale_size_manual(values = c(3,1))+
-      theme_classic()+theme(legend.position = "none")+
-      labs(x = "Inventory Period", y =i_var_label)
-    p_list[[j_type]][[i_var]][["lineplot"]] <- p1
-    
-      
-    }
-    p2 = ggplot(cors_fullPlot[variable == i_var], aes(x = type, y = spearmans_r))+
-      geom_boxplot()+
-      labs(x = "", y = "R")+
-      theme_classic()+
-      coord_cartesian(ylim = c(-1,1))+theme(legend.position = "none")
-    p_list[["cv_cor"]][[i_var]] <- p2
+for(j_type in c("process","hybrid")){
+  i_pdat = p_dat2[type == j_type,]
+  j_linetype = ifelse(j_type == "process", "dashed", "dotted")
+  j_pointtype = ifelse(j_type == "process", 1, 2)
+  p1 =
+    ggplot(i_pdat, aes(x = year2, y = value)) +
+    geom_point(aes(shape = pred_obs2, color = factor(species)), size = 3) +
+    geom_point(data = p_dat2[type != j_type,], aes(x = year2, y = value), color = NA)+
+    geom_line(aes(linetype = pred_obs2, color = factor(species))) +
+    scale_shape_manual(values = c(4,j_pointtype)) +
+    scale_linetype_manual(values = c("solid", j_linetype)) +
+    facet_wrap(
+      ~ variable2,
+      scales        = "free_y", # keep each facet's y-scale
+      ncol          = 1,        # stack facets vertically
+      strip.position = "left",   # move strips from top to the left
+      labeller = label_parsed
+    ) +
+    scale_color_manual(name = "PFT", values = c(scales::hue_pal()(5), "black")) +
+    theme_classic() +
+    labs(x = "Inventory Period", y = NULL) + # remove the default y label
+    theme(
+      strip.placement = "outside",        # place strip label fully outside the panel
+      strip.background = element_blank(),     # Remove the facet label box
+      strip.text.y    = element_text(angle = 0),
+      strip.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      legend.position = "bottom"
+    ) +
+    guides(
+      shape = guide_legend(title = element_blank(), direction = "vertical"),
+      linetype = guide_legend(title = element_blank(), direction = "vertical")
+      )+
+    scale_x_continuous(breaks = seq(min(i_pdat$year2), max(i_pdat$year2), by = 5))
+    p_list[[j_type]][["lineplot"]] <- p1+theme(legend.position = "none")
 }
+p1b = ggplot(p_dat2cast[!is.na(observation)], aes(x = year2, y = prediction-observation)) +
+  geom_hline(yintercept = 0, linetype = "solid", color = "grey50", linewidth = 1)+
+  geom_point(aes(shape = type, color = factor(species)), size = 3) +
+  # geom_point(data = p_dat2[type != j_type,], aes(x = year2, y = value), alpha = 0.1)+
+  geom_line(aes(linetype = type, color = factor(species))) +
+  scale_shape_manual(values = c(process = 1, hybrid = 2)) +
+  scale_linetype_manual(values = c(process = "dashed", hybrid = "dotted"))+
+  facet_wrap(
+    ~ variable2,
+    scales        = "free_y", # keep each facet's y-scale
+    ncol          = 1,        # stack facets vertically
+    strip.position = "left",   # move strips from top to the left
+    labeller = label_parsed
+  ) +
+  scale_color_manual(name = "PFT", values = c(scales::hue_pal()(5), "black")) +
+  theme_classic() +
+  labs(x = "Inventory Period", y = NULL) + # remove the default y label
+  theme(
+    strip.placement = "outside",        # place strip label fully outside the panel
+    strip.background = element_blank(),     # Remove the facet label box
+    strip.text.y    = element_text(angle = 0),
+    strip.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    legend.position = "bottom"
+  ) +
+  guides(
+    shape = guide_legend(title = element_blank(), direction = "vertical"),
+    linetype = guide_legend(title = element_blank(), direction = "vertical")
+  )+
+  scale_x_continuous(breaks = seq(min(p_dat2cast$year2), max(p_dat2cast$year2), by = 5))
+p1b_legend = get_legend(p1b)
+p1b = p1b+theme(legend.position = "none")
+all_cors[,type2 := factor(type, levels = c("process", "hybrid"), labels = c("Process", "Hybrid")),]
+p2 = 
+ggplot(all_cors, aes(x = type2, y = spearmans_r, color = species))+
+  geom_boxplot(position = position_dodge())+
+  labs(x = "", y = "Spearmans R")+
+  theme_classic()+
+  facet_wrap(~variable, ncol = 1)+
+  coord_cartesian(ylim = c(-1,1))+
+  # fully remove stip
+  theme(strip.background = element_blank(),
+        strip.text.x = element_blank(),
+        strip.text.y = element_blank(),
+        axis.title.x = element_blank(),
+        legend.position = "bottom")+
+  scale_color_manual(name = "PFT", values = c(scales::hue_pal()(5),"black"))
+
+p_list[["cv_cor"]] <- 
+  p2+theme(
+    legend.position = "none"
+    )
+  
+p1_legend <- get_legend(p1)
+p2_legend <- get_legend(p2)
+p1to3_legend <- get_legend(p1_legende_basis)
 # load package for textGrob
 library(grid)
-a_label = textGrob("a", x = unit(0.05, "npc"), y = unit(0.95, "npc"), just = c("left", "top"), gp = gpar(fontsize = 16, fontface = "bold"))
-b_label = textGrob("b", x = unit(0.05, "npc"), y = unit(0.95, "npc"), just = c("left", "top"), gp = gpar(fontsize = 16, fontface = "bold"))
-c_label = textGrob("c", x = unit(0.05, "npc"), y = unit(0.95, "npc"), just = c("left", "top"), gp = gpar(fontsize = 16, fontface = "bold"))
+label_grob_f = function(x){
+  textGrob(x, x = unit(0.05, "npc"), y = unit(0.95, "npc"), just = c("left", "top"), gp = gpar(fontsize = 16, fontface = "bold"))
+}
 
 gridExtra::grid.arrange(
   grobs = list(
-    a_label, b_label, c_label,
-    p_list$hybrid$ba$lineplot, p_list$cv_cor$ba, p_list$process$ba$lineplot,
-    p_list$hybrid$dbh$lineplot, p_list$cv_cor$dbh, p_list$process$dbh$lineplot,
-    p_list$hybrid$trees$lineplot, p_list$cv_cor$trees, p_list$process$trees$lineplot,
-    p_list$hybrid$reg$lineplot, p_list$cv_cor$reg, p_list$process$reg$lineplot,
-    p_list$hybrid$growth$lineplot, p_list$cv_cor$growth, p_list$process$growth$lineplot,
-    p_list$hybrid$mort$lineplot, p_list$cv_cor$mort, p_list$process$mort$lineplot
+    label_grob_f("a"), label_grob_f("b"), label_grob_f("c"), label_grob_f("d"),
+    p_list$process$lineplot, p_list$hybrid$lineplot, p1b, p_list$cv_cor,
+    p1to3_legend
     ), 
+  layout_matrix = rbind(
+    c(1,2,3,4),
+    c(5,6,7,8),
+    c(9,9,9,9)),
   # include letters to each plot
-  ncol = 3, widths = c(0.6,0.4,0.6), 
-  heights = c(0.1,0.6,0.6,0.6,0.6,0.6,0.6))
+  widths = c(0.6,0.6,0.6,0.4), 
+  heights = c(0.05,0.95,0.15))
 
 ```
+
+
+
