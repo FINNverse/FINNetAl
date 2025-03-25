@@ -8,7 +8,7 @@ if (length(args) < 1) {
 # batch_index <- 1
 batch_index <- as.integer(args[1])
 # Each batch contains 4 indices; for example, batch 1 -> 1:4, batch 2 -> 5:8, etc.
-jobs_per_process = 6L
+jobs_per_process = 10L
 subset_indices <- (((batch_index - 1) * jobs_per_process) + 1):(batch_index * jobs_per_process)
 cat("Running batch index:", batch_index, "\n")
 cat("Processing tasks with indices:", paste(subset_indices, collapse = ", "), "\n")

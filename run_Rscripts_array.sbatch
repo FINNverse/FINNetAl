@@ -2,7 +2,7 @@
 #SBATCH --job-name=bci-100rep
 #SBATCH --output=bci-100rep_%A_%a.out
 #SBATCH --error=bci-100rep_%A_%a.err
-#SBATCH --time=6:00:00
+#SBATCH --time=8:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
 #SBATCH --partition=gpu-single
@@ -10,7 +10,7 @@
 #SBATCH --mail-user=yannek.kaeber@biom.uni-freiburg.de
 #SBATCH --mem=50G
 #SBATCH --gres=gpu:1
-#SBATCH --array=1-17
+#SBATCH --array=1-10
 
 ################################################################################
 # USAGE EXAMPLE:
