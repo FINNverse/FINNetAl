@@ -176,7 +176,7 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
 
     rm(m1)
     gc()
-    # torch::cuda_empty_cache()
+    torch::cuda_empty_cache()
   }else{
     cat("\nModel already exists:", out_dir)
   }
