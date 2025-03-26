@@ -2,7 +2,7 @@
 #SBATCH --job-name=bci-100rep
 #SBATCH --output=bci-100rep_%A_%a.out
 #SBATCH --error=bci-100rep_%A_%a.err
-#SBATCH --time=6:00:00
+#SBATCH --time=8:00:00
 #SBATCH --ntasks=1                 # Number of tasks (1 task for serial R scripts)
 #SBATCH --cpus-per-task=24          # Number of CPU cores per task
 #SBATCH --partition=gpu_4,gpu_8,gpu_4_a100,gpu_4_h100       # Partition to use (adjust to your system)
@@ -10,7 +10,7 @@
 #SBATCH --mail-user=yannek.kaeber@biom.uni-freiburg.de # Your email for notifications
 #SBATCH --mem=50G
 #SBATCH --gres=gpu:1
-#SBATCH --array=1-17
+#SBATCH --array=1-10
 
 ################################################################################
 # USAGE EXAMPLE:

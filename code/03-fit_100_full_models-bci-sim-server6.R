@@ -74,15 +74,18 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
 
     Sys.setenv(CUDA_VISIBLE_DEVICES=dev)
 
-    obs_dt = fread(paste0("data/BCI/noSplits/", i_folder,"/obs_dt.csv"))
+    obs_dt1 = fread(paste0("data/BCI/noSplits/", i_folder,"/obs_dt.csv"))
     env_dt = fread(paste0("data/BCI/noSplits/", i_folder,"/env_dt.csv"))
     cohorts_dt = fread(paste0("data/BCI/noSplits/", i_folder,"/initial_cohorts1985.csv"))
     m <- torch::torch_load(i_simmodel_path)
 
-    cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = uniqueN(obs_dt$species))
+    cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = uniqueN(obs_dt1$species))
     pred = m$simulate(env = env_dt, init_cohort = cohort1, patches = Npatches)
-    pred_dt = pred$wide$site
-    pred_dt[,reg := reg/0.1,]
+    obs_dt = pred$wide$site
+    obs_dt[dbh == 0, mort := NA_real_]
+    obs_dt[dbh == 0, growth := NA_real_]
+    obs_dt[dbh == 0, dbh := NA_real_]
+    obs_dt[,reg := reg/0.1,]
 
     Nspecies = max(obs_dt$species)
     Nenv = ncol(env_dt) - 2
