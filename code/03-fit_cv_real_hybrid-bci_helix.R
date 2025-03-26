@@ -1,18 +1,6 @@
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## get index of array ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 1) {
-  stop("No batch index provided. Please provide a batch index as an argument.")
-}
-# batch_index <- 10
-batch_index <- as.integer(args[1])
-# Each batch contains 4 indices; for example, batch 1 -> 1:4, batch 2 -> 5:8, etc.
-jobs_per_process = 2L
-subset_indices <- (((batch_index - 1) * jobs_per_process) + 1):(batch_index * jobs_per_process)
-cat("Running batch index:", batch_index, "\n")
-cat("Processing tasks with indices:", paste(subset_indices, collapse = ", "), "\n")
-
 library(data.table)
 library(FINN)
 library(torch)
@@ -26,9 +14,9 @@ all_lossvars = c("ba", "trees", "dbh", "growth", "mort", "reg")
 
 # T_folds <- paste0("T",c(0, 1:2))
 # S_folds <- paste0("S", c(0, 1:5))
-T_folds <- paste0("T",c(0, 2))
-S_folds <- paste0("S", c(0, 3))
-transformer_folds = c("TF0","TF1")
+T_folds <- paste0("T",c(0))
+S_folds <- paste0("S", c(1:5))
+transformer_folds = c("Small","SmallDropout","Medium","MediumDropout" )
 
 fold_names = expand.grid(list(S_folds,T_folds,transformer_folds))
 fold_names = paste0(fold_names$Var1, "_", fold_names$Var2, "_", fold_names$Var3)
@@ -36,19 +24,8 @@ cv_variants <- paste0(rep(fold_names,each = length(unlist(lossvars_comb))),"_",u
 
 directories <- list.files("data/BCI/CVsplits-realdata", full.names = T)
 
-# directories <- directories[grepl("1patch", directories) & grepl("genus", directories)]
-directories = rev(directories)
+directories = directories[8]
 
-# for(i_dir in directories){
-#   for(i_cv in cv_variants){
-#     cv_S = tstrsplit(i_cv, "_", fixed = TRUE)[[1]][1]
-#     cv_T = tstrsplit(i_cv, "_", fixed = TRUE)[[2]][1]
-#     response = tstrsplit(i_cv, "_", fixed = TRUE)[[3]][1]
-#     i_name = basename(i_dir)
-#     out_dir = paste0("results/","02_realdata/",i_name,"_",i_cv,".pt")
-#     if(!file.exists(out_dir)) stop()
-#   }
-# }
 
 cat("\nscript started")
 all_variants = list()
@@ -58,16 +35,11 @@ for(i_dir in directories){
   }
 }
 
-if(min(subset_indices) > length(all_variants)) {
-  stop("Batch index exceeds available task indices (1:length(all_variants)).")
-}
-subset_indices <- subset_indices[subset_indices < length(all_variants)]
 
 # Process only the subset for this batch
-.selected_variants <- all_variants[subset_indices]
 
-cl = parallel::makeCluster(jobs_per_process)
-# nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
+cl = parallel::makeCluster(16L)
+nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
 parallel::clusterEvalQ(cl, {
   library(data.table)
@@ -85,14 +57,12 @@ cat("\nscript started")
 # for(i_cv in cv_variants){
 # i_var = .selected_variants[[2]]
 parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environment())
-.null = parLapply(cl, .selected_variants, function(i_var){
+.null = parLapply(cl, all_variants, function(i_var){
   i_dir = i_var$i_dir
   i_cv = i_var$cv_variants
   cv_S = tstrsplit(i_cv, "_", fixed = TRUE)[[1]][1]
   cv_T = tstrsplit(i_cv, "_", fixed = TRUE)[[2]][1]
   tf = tstrsplit(i_cv, "_", fixed = TRUE)[[3]][1]
-  if(tf == "TF0") transformer = FALSE
-  if(tf == "TF1") transformer = TRUE
   response = tstrsplit(i_cv, "_", fixed = TRUE)[[4]][1]
   obsNA = unlist(strsplit(response, ".", fixed = TRUE))
 
@@ -105,11 +75,11 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
 
     # cat(paste("Starting", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
 
-    # myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
-    # dist = cbind(nodes,0:3)
-    # dev = as.integer(as.numeric(dist[which(dist[,1] %in% myself, arr.ind = TRUE), 2]))
+    myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
+    dist = cbind(nodes,0:3)
+    dev = as.integer(as.numeric(dist[which(dist[,1] %in% myself, arr.ind = TRUE), 2]))
 
-    # Sys.setenv(CUDA_VISIBLE_DEVICES=dev)
+    Sys.setenv(CUDA_VISIBLE_DEVICES=dev)
 
     cat("\nread data:", i_name)
     cat("\nCV variant:", i_cv)
@@ -119,6 +89,10 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
     obs_dt = fread(paste0(i_dir,"/obs_dt_",cv_S,"_",cv_T,"_train.csv"))
     # only pick columns siteID species  year   dbh    ba trees growth  mort   reg r_mean_ha
     obs_dt = obs_dt[,.(siteID, species, year, dbh, ba, trees, growth, mort, reg)]
+    
+    obs_dt[dbh == 0, mort := NA_real_]
+    obs_dt[dbh == 0, growth := NA_real_]
+    obs_dt[dbh == 0, dbh := NA_real_]
 
     cohorts_dt = fread(paste0(i_dir,"/initial_cohorts_",cv_S,"_",cv_T,"_train.csv"))
     # only pick columns siteID   dbh species patchID census trees cohortID
@@ -194,8 +168,18 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
     for(i_lossvar in all_lossvars[!(all_lossvars %in% obsNA)]){
       obs_dt[[i_lossvar]] = NA_real_
     }
-
-    hybrid_growth = createHybrid(~., transformer = transformer, emb_dim = 16L,dropout = 0.1)
+    
+    if(grepl("Dropout", tf)) {
+      drop = 0.2
+    } else {
+      drop = 0.0
+    }
+    
+    if(grepl("Small", tf)) {
+      hybrid_growth = createHybrid(~., transformer = TRUE, emb_dim = 6L,dropout = drop, encoder_layers = 1L, dim_feedforward = 100L)
+    } else {
+      hybrid_growth = createHybrid(~., transformer = TRUE, emb_dim = 20L,dropout = drop, encoder_layers = 1L, dim_feedforward = 256L)
+    }
 
     ## create model ####
     m1 = finn(
@@ -220,7 +204,7 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
     Npatches = uniqueN(cohorts_dt$patchID)
 
     source("code/99_cohort500fix.R")
-    m1$fit(data = obs_dt, batchsize = batchsize, env = env_dt, init_cohort = cohort1,  epochs = Nepochs, patches = Npatches, lr = 0.01, checkpoints = 5L,
+    m1$fit(data = obs_dt, batchsize = batchsize, env = env_dt, init_cohort = cohort1,  epochs = Nepochs, patches = Npatches, lr = 0.01, checkpoints = Inf,
            optimizer = torch::optim_ignite_adam, device = "gpu", record_gradients = FALSE,weights = c(0.1, 10, 1.0, 10.0, 1, 1), plot_progress = FALSE,
            loss= c(dbh = "mse", ba = "mse", trees = "nbinom", growth = "mse", mortality = "mse", regeneration = "nbinom")
     )

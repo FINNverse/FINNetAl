@@ -4,27 +4,27 @@ hybrid_transformer = nn_module("hybrid_transformer",
                                                      dgtl_embedder_dim = 4L,
                                                      max_len = 1000L,
                                                      emb_dim=20L,
+                                                     species_embd = 2L,
                                                      num_heads=1L,
                                                      num_layers=1L,
                                                      dropout=0.1,
                                                      dim_feedforward = 512L
                                ) {
+                                 self$emb_dim = emb_dim
                                  self$num_species = num_species
-                                 self$species_embedder = nn_embedding(num_embeddings=num_species, embedding_dim=emb_dim/2)
+                                 self$species_embedder = nn_embedding(num_embeddings=num_species, embedding_dim=species_embd)
                                  self$dgtl_embedder = nn_sequential(nn_linear(dgtl_embedder_dim, 50L),
-                                                                    nn_leaky_relu(),
-                                                                    nn_dropout(dropout),
-                                                                    nn_linear(50L, emb_dim/2))
+                                                                    #nn_dropout(dropout),
+                                                                    nn_linear(50L, emb_dim-species_embd))
                                  self$env_embedder = nn_sequential(nn_linear(num_env_vars, 50L),
-                                                                   nn_leaky_relu(),
-                                                                   nn_dropout(dropout),
+                                                                   #nn_dropout(dropout),
                                                                    nn_linear(50L, emb_dim))
                                  self$positional_encoding = FINN:::PositionalEncoding(emb_dim, dropout, max_len = 10000L)
                                  encoder_layer = FINN:::TransformerEncoderLayer(d_model=emb_dim, nhead=num_heads,batch_first = TRUE, dim_feedforward = dim_feedforward)
                                  self$transformer_encoder = FINN:::TransformerEncoder(encoder_layer, num_layers=num_layers)
                                  self$output = nn_sequential(nn_linear(emb_dim, 100L),
-                                                             nn_leaky_relu(),
-                                                             nn_dropout(dropout),
+                                                             nn_gelu(),
+                                                             #nn_dropout(dropout),
                                                              nn_linear(100, 1L))
 
                                },
@@ -33,22 +33,22 @@ hybrid_transformer = nn_module("hybrid_transformer",
                                  orig_shape2 = dbh$shape[3]
                                  if(!is.null(growth)) {
                                    cohort_context = torch_cat(list(
-                                     torch::torch_log(dbh$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0),
-                                     growth$view(c(-1L, orig_shape2))$unsqueeze(3L),
-                                     torch::torch_log(trees$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0),
-                                     light$view(c(-1L, orig_shape2))$unsqueeze(3L)
+                                     torch::torch_log(dbh$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0)-2.0,
+                                     growth$view(c(-1L, orig_shape2))$unsqueeze(3L)-0.5,
+                                     torch::torch_log(trees$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0)-2.0,
+                                     light$view(c(-1L, orig_shape2))$unsqueeze(3L)-0.5
                                    ), dim = 3L)
                                  } else {
                                    cohort_context = torch_cat(list(
-                                     torch::torch_log(dbh$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0),
-                                     torch::torch_log(trees$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0),
-                                     light$view(c(-1L, orig_shape2))$unsqueeze(3L)
+                                     torch::torch_log(dbh$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0)-2.0,
+                                     torch::torch_log(trees$view(c(-1L, orig_shape2))$unsqueeze(3L)+1.0)-2.0,
+                                     light$view(c(-1L, orig_shape2))$unsqueeze(3L)-0.5
                                    ), dim = 3L)
                                  }
                                  cohort_context_em = self$dgtl_embedder(cohort_context)
                                  species_em = self$species_embedder(species$view(c(-1L, orig_shape2))$to(dtype=torch::torch_long()))
                                  env_em = self$env_embedder( env$unsqueeze(2L)$`repeat`(c(1L, orig_shape1[2],1L)) )
-                                 env_em = env_em$view(c(-1L, species_em$shape[3]*2))
+                                 env_em = env_em$view(c(-1L, self$emb_dim))
                                  species_em_cont = torch::torch_cat(list(
                                    species_em,
                                    cohort_context_em

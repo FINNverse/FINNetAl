@@ -1,16 +1,16 @@
 #!/bin/bash
-#SBATCH --job-name=bci-real-hybrid2
-#SBATCH --output=logs/bci-real-hybrid2_%A_%a.out
-#SBATCH --error=logs/bci-real-hybrid2_%A_%a.err
-#SBATCH --time=24:00:00            # Time limit (HH:MM:SS)
+#SBATCH --job-name=bci-100rep
+#SBATCH --output=bci-100rep_%A_%a.out
+#SBATCH --error=bci-100rep_%A_%a.err
+#SBATCH --time=8:00:00
 #SBATCH --ntasks=1                 # Number of tasks (1 task for serial R scripts)
-#SBATCH --cpus-per-task=16          # Number of CPU cores per task
+#SBATCH --cpus-per-task=24          # Number of CPU cores per task
 #SBATCH --partition=gpu_4,gpu_8,gpu_4_a100,gpu_4_h100       # Partition to use (adjust to your system)
 #SBATCH --mail-type=ALL            # Notifications for job start, end, fail
 #SBATCH --mail-user=yannek.kaeber@biom.uni-freiburg.de # Your email for notifications
-#SBATCH --mem=100G
+#SBATCH --mem=50G
 #SBATCH --gres=gpu:1
-#SBATCH --array=1-32
+#SBATCH --array=1-10
 
 ################################################################################
 # USAGE EXAMPLE:
