@@ -22,7 +22,7 @@ library(parallel)
 Nepochs = 8000
 overwrite = F
 simmodel_path = "results/01_full/pft-period7-25patches_full.pt"
-reps = 1:100
+reps = 108:900
 
 cat("\nscript started")
 all_jobs = list()
