@@ -71,6 +71,7 @@ clean_site_dir = paste0(out_dir0, "/data-cleaning/site")
 if(!dir.exists(clean_site_dir)) dir.create(clean_site_dir, recursive = T)
 fwrite(grid_dt_1patch, paste0(clean_site_dir, "/grid_dt_1patch.csv"))
 fwrite(grid_dt_25patches, paste0(clean_site_dir, "/grid_dt_25patches.csv"))
+fwrite(all_trees_clean,paste0(clean_site_dir, "/all_trees_clean.csv"))
 
 # plot grid
 p25 <- ggplot() +
