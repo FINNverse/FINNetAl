@@ -1,6 +1,12 @@
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## correlations for all combinations ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
+library(torch)
+library(FINN)
+library(data.table)
+library(ggplot2)
+source("code/plot-functions.R")
+
 gc()
 all_models <- c(
   list.files("results/02_realdata", full.names = T, recursive = T),
@@ -8,9 +14,16 @@ all_models <- c(
   list.files("results/02_realdata_hybridTF1", full.names = T, recursive = T),
   list.files("results/02_realdata_hybrid_mortTF0", full.names = T, recursive = T),
   list.files("results/02_realdata_hybrid_mortTF1", full.names = T, recursive = T),
-  list.files("results/02_realdata_hybridTF1fixed", full.names = T, recursive = T)
+  # list.files("results/02_realdata_hybridTF1fixed", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridSmall", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridSmallDropout", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridSmallDropoutfixed", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridMedium", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridMediumDropout", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridMediumDropoutfixed", full.names = T, recursive = T)
 )
-overwrite = T
+
+overwrite = F
 if(overwrite){
   all_cors_dt <- data.table()
   all_cors_dt_plot <- data.table()
@@ -27,6 +40,8 @@ if(overwrite){
 
   # all_models <- c(paste0("results/02_realdata/",gsub(".pt","",unique(basename(all_models))),"_ba.trees.dbh.growth.mort.reg.pt"), all_models)
 }
+all_models <- all_models[grepl("period7-25patches", all_models)]
+
 for(i in all_models){
   cat("\n", which(i == all_models), "of", length(all_models),"\nstarting", i, "\n")
   pred_dt = build_model_dt(i)
@@ -133,17 +148,9 @@ for(i in 1:length(cors_list)){
   cors_list[[i]][grepl("realdata",data),simreal := "real",]
   cors_list[[i]][grepl("simulated",data),simreal := "simulated",]
   # set hybrid
-
-  cors_list[[i]][grepl("hybrid", data),hybrid := "yes",]
-  cors_list[[i]][!grepl("hybrid", data),hybrid := "no",]
-  cors_list[[i]][grepl("TF1", data),transformer := "yes",]
-  cors_list[[i]][grepl("TF0", data),transformer := "no",]
-  cors_list[[i]][data == "02_realdata_hybridTF1", hybrid_process := "growth",]
-  cors_list[[i]][data == "02_realdata_hybridTF1fixed", hybrid_process := "growthfixed",]
-  cors_list[[i]][data == "02_realdata_hybridTF0", hybrid_process := "growth",]
-  cors_list[[i]][data == "02_realdata_hybrid_mortTF1", hybrid_process := "mort",]
-  cors_list[[i]][data == "02_realdata_hybrid_mortTF1", hybrid_process := "mort",]
-  cors_list[[i]][data == "02_realdata_hybrid_mortTF0", hybrid_process := "mort",]
+  
+  cors_list[[i]][grepl("hybrid", data),hybrid := gsub("hybrid","",tstrsplit(gsub("hybrid_","hybrid",data),"_",fixed = T)[[3]]),]
+  cors_list[[i]][!grepl("hybrid", data),hybrid := "nohybrid",]
 
   # set cv
   cors_list[[i]][, cv := paste0(tstrsplit(name,"_")[[2]],tstrsplit(name,"_")[[3]]),]
@@ -169,22 +176,21 @@ for(i in 1:length(cors_list)){
   dt = cors_list[[i]]
   i_name = names(cors_list)[i]
   if(!("species" %in% names(dt))) dt[, species := 1,]
-  pdat <- dcast(dt, species+variable+test_train+dataset+cv+scale+simreal~hybrid+hybrid_process+paste0("T",transformer), value.var = "spearmans_r")
-  data.table::setnames(
-    pdat,
-    old = c("no_NA_TNA", "yes_growth_Tno", "yes_growth_Tyes", "yes_mort_Tno", "yes_mort_Tyes", "yes_growthfixed_Tyes"),
-    new = c("nohybrid", "growth_NoTF", "growth_TF", "mort_NoTF", "mort_TF", "growth_TF1fixed")
-  )
+  pdat <- dcast(dt, species+variable+test_train+dataset+cv+scale+simreal~hybrid, value.var = "spearmans_r")
+  # difference for "Medium"        "MediumDropout" "Small"         "SmallDropout"  "TF0"           "TF1"           "mortTF0"       "mortTF1"       "no"      
   pdat[,":="(
-    growth_NoTF.diff = growth_NoTF - nohybrid,
-    growth_TF.diff = growth_TF - nohybrid,
-    mort_NoTF.diff = mort_NoTF - nohybrid,
-    mort_TF.diff = mort_TF - nohybrid,
-    growth_TF1fixed.diff = growth_TF1fixed - nohybrid
+    Medium.diff = Medium - nohybrid,
+    MediumDropout.diff = MediumDropout - nohybrid,
+    Small.diff = Small - nohybrid,
+    SmallDropout.diff = SmallDropout - nohybrid,
+    TF0.diff = TF0 - nohybrid,
+    TF1.diff = TF1 - nohybrid,
+    mortTF0.diff = mortTF0 - nohybrid,
+    mortTF1.diff = mortTF1 - nohybrid
   ),]
 
-
-  pdat2 <- melt(pdat[,-c("growth_NoTF", "growth_TF", "mort_NoTF", "mort_TF", "growth_TF1fixed")],
+  pdat2 <- melt(pdat[,-c("Medium", "MediumDropout", "Small", "SmallDropout", "TF0", "TF1", "mortTF0", "mortTF1")],
+  # pdat2 <- melt(pdat[,-c("growth_NoTF", "growth_TF", "mort_NoTF", "mort_TF", "growth_TF1fixed")],
                 id.vars = c("nohybrid","species","variable","test_train","dataset","cv","scale","simreal"), variable.name = "hybrid", value.name = "r_diff")
 
   pdat2 <- pdat2[,.(
@@ -218,7 +224,7 @@ for(i in 1:length(cors_list)){
     scale_fill_gradient2(name = "spearmans_r",low = "blue", mid = "white", high = "red", midpoint = 0, limits = c(-1,1))+
     ggtitle(paste0(i_name, " ", "nohybrid cor"))
   print(p)
-  p=ggplot(dt[hybrid == "yes"], aes(x = cv, y = variable))+
+  p=ggplot(dt[hybrid != "nohybrid"], aes(x = cv, y = variable))+
     geom_tile(aes(fill = spearmans_r))+
     facet_grid(scale~test_train+paste0(hybrid_process,"_TF",as.integer(transformer=="yes")))+
     theme_classic()+
@@ -245,7 +251,22 @@ for(i in 1:length(cors_list)){
 }
 dev.off()
 
-exmple_models <- all_models[grepl("genus-period7-25patches_S0_T0", all_models)]
+all_models <- c(
+  list.files("results/02_realdata", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridTF0", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridTF1", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybrid_mortTF0", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybrid_mortTF1", full.names = T, recursive = T),
+  # list.files("results/02_realdata_hybridTF1fixed", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridSmall", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridSmallDropout", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridSmallDropoutfixed", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridMedium", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridMediumDropout", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridMediumDropoutfixed", full.names = T, recursive = T)
+)
+
+exmple_models <- all_models[grepl("pft-period7-25patches_S0_T0", all_models)]
 # exmple_models2 = gsub("results/02_realdata_hybridTF1","results/02_realdata_hybridTF1fixed",exmple_models)
 pred_nohybrid = build_model_dt(exmple_models[1])[[1]][test_train == "train"]
 pred_growthTF0 = build_model_dt(exmple_models[2])[[1]][test_train == "train"]

@@ -4,7 +4,7 @@ format:
   docx:
     reference-doc: figures-doc.docx
     keep-md: false
-    fig-format: svg
+    fig-format: pdf
 crossref:
   fig-title: '**Figure**'
   fig-labels: arabic
@@ -18,8 +18,7 @@ crossref:
 knitr::opts_chunk$set(fig.path="figures/", echo = FALSE)
 ```
 
-
-
+# Plotting Functions
 
 ```{r}
 #| echo: false
@@ -28,6 +27,11 @@ library(ggplot2)
 library(data.table)
 source("code/plot-functions.R")
 library(gridExtra)
+library(grid)
+library(FINN)
+library(ggbeeswarm)
+library(gghalves)
+library(data.table)
 
 # Function to extract the legend as a grob
 get_legend <- function(ggplot_obj) {
@@ -46,301 +50,359 @@ get_legend <- function(ggplot_obj) {
   }
 }
 
+label_grob_f = function(x){
+  textGrob(x, x = unit(0.05, "npc"), y = unit(0.95, "npc"), just = c("left", "top"), gp = gpar(fontsize = 16, fontface = "bold"))
+}
+
+
 ```
 
-## Results
-
-### Model fit
+# Read fitted models
 
 ```{r}
 #| echo: false
 #| message: false
 
 chosen_scale = "pft-period7-25patches"
-
-fig3models <- c(
+fitted_models <- c(
     list.files("results/02_realdata/", full.names = T, recursive = T, pattern = chosen_scale),
     list.files("results/02_realdata_hybridTF0/", full.names = T, recursive = T, pattern = chosen_scale)
+    # list.files("results/02_realdata_hybridSmall/", full.names = T, recursive = T, pattern = chosen_scale)
 )
-
-## create fit simulations
-fig3models_fit <- fig3models[grepl("S0_T0",fig3models)]
-fit_process = build_model_dt(pt_file = fig3models_fit[1])[[1]]
-fit_hybrid = build_model_dt(pt_file = fig3models_fit[2])[[1]]
-all_dt = rbind(
-  data.table(fit_process[test_train == "train"], type = "process"),
-  data.table(fit_hybrid[test_train == "train"], type = "hybrid")
-)
-period_length = unique(all_dt[!is.na(period_length)]$period_length)
-all_dt <- all_dt[,-c("period_length")]
-
-### species to pft
-# species_dt <- fread("data/BCI/data-cleaning/genus/species_assigned.csv")
-# all_dt2 <- merge(all_dt, unique(species_dt[,.(species = speciesID, pft = PFT_2axes)]), by = "species", all.x = T, allow.cartesian = T)
-# all_dt2[,species := pft,]
-# all_dt2 <- all_dt2[,-c("pft")]
-# all_dt2[,.(
-#   ba.pred = sum(ba.pred, na.rm = T),
-#   ba.obs = sum(ba.obs, na.rm = T),
-#   trees.pred = sum(trees.pred, na.rm = T),
-#   trees.obs = sum(trees.obs, na.rm = T),
-#   dbh.pred = sum(dbh.pred*trees.pred, na.rm = T)/sum(trees.pred, na.rm = T),
-#   dbh.obs = sum(dbh.obs*trees.obs, na.rm = T)/sum(trees.obs, na.rm = T),
-#   growth.pred = sum(growth.pred*trees.pred, na.rm = T)/sum(trees.pred, na.rm = T),
-#   growth.obs = sum(growth.obs*trees.obs, na.rm = T)/sum(trees.obs, na.rm = T),
-#   mort.pred = sum(mort.pred*trees.pred, na.rm = T)/sum(trees.pred, na.rm = T),
-#   mort.obs = sum(mort.obs*trees.obs, na.rm = T)/sum(trees.obs, na.rm = T),
-#   reg.pred = sum(reg.pred*trees.pred, na.rm = T)/sum(trees.pred, na.rm = T),
-#   reg.obs = sum(reg.obs*trees.obs, na.rm = T)/sum(trees.obs, na.rm = T)
-# ), by = .(siteID,year,species,test_train, type)]
-# ###
-
-
-
-all_dt2 <- melt(all_dt, id.vars = c("type","siteID","year","species","test_train"))
-all_dt2[grepl("pred",variable), pred_obs := "pred",]
-all_dt2[grepl("obs",variable), pred_obs := "obs",]
-all_dt2[, variable := gsub(".obs|.pred","",variable),]
-
-p_dat <- all_dt2[test_train == "train",.(value = mean(value,na.rm = T)), by = .(type,year,species,test_train, pred_obs, variable)]
-p_dat2 <- p_dat[!is.na(value)]
-
-p_dat2_all <- 
-  rbind(
-    p_dat2[variable %in% c("ba", "trees"),.(
-      value = sum(value, na.rm = T),
-      species = "all"
-    ), by = .(type, year, test_train, pred_obs, variable)],
-    p_dat2[variable %in% c("dbh", "reg","growth","mort"),.(
-      value = mean(value, na.rm = T),
-      species = "all"
-    ), by = .(type, year, test_train, pred_obs, variable)]
-  )
-
-p_dat2 <- rbind(
-  p_dat2,
-  p_dat2_all
-)
-
-p_dat2[variable %in% c("ba", "trees"), value := value/0.1,]
-p_dat2[variable %in% c("mortality", "growth"), value := value/5*100,]
-
-
-
-# create cv simulations
-fig3models_cv <- fig3models[!grepl("S0_T0",fig3models)]
-# fig3models_cv <- fig3models[!grepl("S0_T0",fig3models) & grepl("T0",fig3models)]
-
-cors_fullPlot = fread("results/cors_fullPlot.csv")
-cors_fullPlotSpecies <- fread("results/cors_fullPlotSpecies.csv")
-
-all_cors <- rbind(
-  data.table(cors_fullPlot, species = "all"),
-  cors_fullPlotSpecies
-)
-
-all_cors <- all_cors[scale == chosen_scale & grepl("T0", cv),]
-all_cors[data == "02_realdata_hybridTF1",type := "hybrid",]
-all_cors[data == "02_realdata",type := "process",]
-all_cors[, type := factor(type, levels = c("process", "hybrid"), ordered = T),]
-all_cors <- all_cors[!is.na(type)]
-all_cors[,species := factor(species, levels = c(sort(unique(all_cors$species)))),]
+fitted_models <- fitted_models[grepl("S0_T0",fitted_models)]
 
 ```
 
+## Figure 2 (Succession Random Species)
+## Figure 2 (Succession)
+### Random Species
+
 ```{r}
-#| label: fig-Fig_3
-#| fig-format: svg
-#| fig-width: 13
-#| fig-height: 10
+#| label: fig-Fig_2b
+#| fig-format: pdf
+#| fig-width: 10
+#| fig-height: 6
 #| echo: false
 #| silent: true
 #| message: false
 #| warning: false
-#| fig-cap: "Observed and predicted forest structure and demographic rates for five PFTs. a) and b) display the observed values (straight line & crosses) vs the predicted values from the process model (dashed line & circles) and the hybrid model (dotted line & triangles), respectively. c) shows the absolute difference between the observed values and the predictions of the process and hybrid model. d) shows the calculated pearson correlation from the five-fold blocked spatial cross-validation. The first two rows show the observed and predicted values for basal area and tree density. The third and fourth row show the observed and predicted values for diameter at breast height (dbh), regeneration, growth, and mortality."
+#| fig-cap: "Parameter recovery from 1000 replicate simulations and refits of the full model using five‑fold spatial cross‑validation. Blue half‑violin/half‑box plots show the distribution of estimation errors (posterior mean of the fitted parameter minus its true value). a) Process‑level parameters: errors grouped by ecological process (competition, growth, mortality, regeneration) and shown for the corresponding process parameters (e.g., compHeight, growthLight, mortSize). b) Environmental parameter estimates: errors for the weights associated with the intercept and six climatic covariates (Prec, SR_kW_m2, RH_prc, T_max, T_min, swp) within each process. Because the neural‑network component consists of a single linear layer, these weights are equivalent to classical multivariate linear‑regression coefficients. The red horizontal line indicates perfect recovery (error = 0)."
 
+library(FINN)
+library(data.table)
+library(ggplot2)
 
-vars = c("ba", "trees", "dbh", "reg","growth","mort")
-var_labels <- c(
-  expression(basal~area~(m^2~ha^-1)),
-  expression(trees~(ha^-1)),
-  expression(dbh~(cm)),
-  expression(regeneration~(ha^-1)),
-  expression(growth~(m^3~ha^-1~yr^-1)),
-  expression(mortality~(m^3~ha^-1~yr^-1))
+Ntimesteps = 100  # number of timesteps
+Nsites = 1 # number of sites
+patch_size = 0.1
+# one species
+Nsp = 5 # number of species
+
+FINN.seed(1234)
+# we draw the same shade parameters for each process for simplicity
+# shade parameters correspond to the fraction of light a species needs to succesfully grow, regenerate, or survive.
+shadeSP = c(0.1,0.2,0.5,0.5,0.7)
+
+# regeneration parameters
+parReg = shadeSP # regeneration is only dependent on shade and environment
+parRegEnv = list(matrix(c(
+  c(1,2,3,3,5), # intercept regulating the overall effect size
+  # runif(Nsp, 1, 4), # intercept regulating the overall effect size
+  runif(Nsp, -2, 2) # the second parameter modulates the effect of the environmental variable
+),Nsp, 2))
+
+# growth parameters
+parGrowth = matrix(c(
+  shadeSP, # see above
+  c(0.06,0.07,0.1,0.08,0.1) # the second growth parameter modulates the size dependent growth
+  # runif(Nsp, 0, 0.1) # the second growth parameter modulates the size dependent growth
+),Nsp, 2) 
+
+parGrowthEnv = list(matrix(c(
+  c(0.05,0.1,0.2,1,2), # intercept regulating the overall effect size
+  # runif(Nsp, -2, -0.5), # intercept regulating the overall effect size
+  runif(Nsp, -2, -0.5) # the second parameter modulates the effect of the environmental variable
+),Nsp, 2))
+
+# mortality parameters
+parMort = matrix(c(
+  as.numeric(scale(shadeSP)), # see above
+  as.numeric(scale(parGrowth[,2]))*0.01, # the second growth parameter modulates the size dependent mortality
+  # runif(Nsp, -1, -0.1), # the second mort parameter modulates the size dependent mortality
+  rep(0,Nsp) # the third mort parameter modulates the growth dependent mortality
+  # runif(Nsp, -1, -.1) # the third mort parameter modulates the growth dependent mortality
+),Nsp, 3)
+parMortEnv = list(matrix(c(
+  runif(Nsp, -3, -2), # intercept regulating the overall effect size
+  runif(Nsp, -3, -2) # the second parameter modulates the effect of the environmental variable
+), Nsp, 2))
+
+# allometric parameters for the calculation of tree height from a trees diameter
+# parHeight = runif(Nsp, 0.3, 0.7)
+# growth parameters
+parComp = matrix(c(
+  # runif(Nsp, 0.3, 0.7), # parHeight
+  c(0.5,0.5,0.4,0.7,0.6), # parHeight
+  # runif(Nsp, 0.2, 0.2) # Competition strength
+  c(0.3,0.2,0.2,0.2,0.1) # parHeight
+),Nsp, 2)
+
+# Create a wide-format data.table with one row per species
+pars_dt <- data.table(
+  speciesID   = 1:Nsp,
+  reg         = parReg,
+  growth1      = parGrowth[, 1],
+  growth2      = parGrowth[, 2],
+  mort1        = parMort[, 1],
+  mort2        = parMort[, 2],
+  mort3        = parMort[, 3],
+  compHeight  = parComp[, 1],
+  compStrength= parComp[, 2],
+  regEnv1     = sapply(parRegEnv, function(x) x[1, 1]),
+  regEnv2     = sapply(parRegEnv, function(x) x[1, 2]),
+  growthEnv1  = sapply(parGrowthEnv, function(x) x[1, 1]),
+  growthEnv2  = sapply(parGrowthEnv, function(x) x[1, 2]),
+  mortEnv1    = sapply(parMortEnv, function(x) x[1, 1]),
+  mortEnv2    = sapply(parMortEnv, function(x) x[1, 2])
 )
-var_labels2 <- c(
-  "basal~area~(m^2~ha^-1)",
-  "trees~(ha^-1)",
-  "dbh~(cm)",
-  "regeneration~(ha^-5)",
-  "growth~('%'~yr^-1)",
-  "mortality~('%'~yr^-1)"
+pars_dt
+
+# we first generate a data.table with all combinations of site and timestep.
+env_dt <- data.table(
+  expand.grid(
+    list(
+      siteID = 1:Nsites,
+      year = 1:Ntimesteps
+    )
+  )
 )
-p_dat2[,variable2 := factor(
-  variable, 
-  levels = vars,
-  labels = var_labels2),]
 
-p_dat2[, pred_obs2 := factor(pred_obs, levels = c("obs","pred"), labels = c("observation","prediction")) ,]
+dist_dt <- env_dt
 
-if(grepl("period35",chosen_scale)){
-  p_dat2[, year2 := 1984+year,]
-}else{
-  p_dat2[, year2 := 1985+year*5,]
-}
+# for this very simple model we will have a constant environment for all sites and timesteps
+env_dt$env1 = rep(0, Ntimesteps)
 
-p_dat2cast <- dcast(p_dat2, type + year2 + variable2 + species ~ pred_obs2, value.var = "value")
-p_dat2[,type2 := type,]
-p_dat2[pred_obs == "obs",type2 := "observation",]
-p_dat2[,type2 := factor(type2, levels = c("observation", "process", "hybrid"), 
-                        labels = c("Observed", "Predicted (Process Model)", "Predicted (Hybrid Model)")),]
-unique(p_dat2$type2)
-p1_legende_basis =
-  ggplot(p_dat2, aes(x = year2, y = value)) +
-  geom_point(aes(shape = type2, color = factor(species)), size = 3) +
-  geom_line(aes(linetype = type2, color = factor(species))) +
-  scale_shape_manual(values = c(4, 1, 2)) +
-  scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
-  scale_color_manual(name = "PFT", values = c(scales::hue_pal()(5), "black"))+
-  theme_classic()+
-  theme(
-      strip.placement = "outside",        # place strip label fully outside the panel
-      strip.background = element_blank(),     # Remove the facet label box
-      strip.text.y    = element_text(angle = 0),
-      strip.text.x = element_blank(),
-      legend.position = "bottom",
-      legend.title.position = "left"
-    ) +
-    guides(
-      shape = guide_legend(position = "bottom", direction = "vertical", title = "Observation / Model Type"),
-      linetype = guide_legend(position = "bottom",direction = "vertical", title = "Observation / Model Type")
-      )
+# we can also specify the intensity of disturbances for each timestep
+
+# here we specify a disturbance frequency of 1%, which means that there is a 1% chance each year that a disturbance occurs
+# disturbance_frequency = 0.05 
+disturbance_frequency = 0.0
+
+# the disturbance intensity at each timestep is the fraction of patches that is disturbed at that time step
+# here we specify a disturbance frequency of 1%, which means that there is a 1% chance each year that a disturbance occurs
+disturbance_intensity = rbinom(Ntimesteps*Nsites,1,0.2)*runif(Ntimesteps*Nsites, 0.5, 1)
+
+# this will result in 0 to 20 % of the patches being disturbed at each timestep with a change of 1% that a disturbance occurs at the timestep
+dist_dt$intensity = rbinom(Ntimesteps*Nsites, 1, disturbance_frequency)*disturbance_intensity
+
+predictions <- list()
+simulationModel = finn(N_species = Nsp, 
+                       competition_process = createProcess(~0, func = FINN::competition),
+                       growth_process = createProcess(~1+env1, initEnv = parGrowthEnv,initSpecies = parGrowth, func = FINN::growth),
+                       regeneration_process = createProcess(~1+env1, initEnv = parRegEnv,initSpecies = parReg, func = FINN::regeneration),
+                       mortality_process = createProcess(~1+env1, initEnv = parMortEnv,initSpecies = parMort, func = FINN::mortality),
+)
+
+predictions[["patches_1"]] = 
+  simulationModel$simulate(init_cohort = NULL, env = env_dt, disturbance= dist_dt, device = "cpu", patches = 1)
+
+simulationModel = finn(N_species = Nsp, 
+                       competition_process = createProcess(~0, func = FINN::competition),
+                       growth_process = createProcess(~1+env1, initEnv = parGrowthEnv,initSpecies = parGrowth, func = FINN::growth),
+                       regeneration_process = createProcess(~1+env1, initEnv = parRegEnv,initSpecies = parReg, func = FINN::regeneration),
+                       mortality_process = createProcess(~1+env1, initEnv = parMortEnv,initSpecies = parMort, func = FINN::mortality),
+)
+
+predictions[["patches_100"]] = 
+  simulationModel$simulate(init_cohort = NULL, env = env_dt, disturbance = dist_dt, device = "cpu", patches = 100)
 
 p_list <- list()
-for(j_type in c("process","hybrid")){
-  i_pdat = p_dat2[type == j_type,]
-  j_linetype = ifelse(j_type == "process", "dashed", "dotted")
-  j_pointtype = ifelse(j_type == "process", 1, 2)
-  p1 =
-    ggplot(i_pdat, aes(x = year2, y = value)) +
-    geom_point(aes(shape = pred_obs2, color = factor(species)), size = 3) +
-    geom_point(data = p_dat2[type != j_type,], aes(x = year2, y = value), color = NA)+
-    geom_line(aes(linetype = pred_obs2, color = factor(species))) +
-    scale_shape_manual(values = c(4,j_pointtype)) +
-    scale_linetype_manual(values = c("solid", j_linetype)) +
-    facet_wrap(
-      ~ variable2,
-      scales        = "free_y", # keep each facet's y-scale
-      ncol          = 1,        # stack facets vertically
-      strip.position = "left",   # move strips from top to the left
-      labeller = label_parsed
-    ) +
-    scale_color_manual(name = "PFT", values = c(scales::hue_pal()(5), "black")) +
+for(i in c("patches_1", "patches_100")){
+  # p_dat <- predictions[[i]]$long$site[variable == "ba", .(value = mean(value)), by = .(year, species, variable)]
+  p_dat <- predictions[[i]]$long$site[, .(value = mean(value)), by = .(year, species, variable)]
+  # p_dat[, variable2 := factor(
+  #   variable,
+  #   levels = c("dbh", "ba", "trees", "AL", "growth", "mort", "reg", "r_mean_ha"),
+  #   labels =  c("avg. DBH [cm]", "Basal Area [m²/ha]", "Trees [N/ha]", 
+  #               "Available Light [%]", "Growth [cm/yr]", "Mortality [%]", 
+  #               "Reg. Count [N/ha]", "Reg. Mean [N/ha]")
+  # ),]
+  p_dat[, variable2 := factor(
+    variable,
+    levels = c("dbh", "ba", "trees", "AL", "growth", "mort", "r_mean_ha"),
+    labels =  c("avg. DBH [cm]", "Basal Area [m²/ha]", "Trees [N/ha]", 
+                "Available Light [%]", "Growth [%/100]", "Mortality [%/100]", 
+                "Reg. Mean [N/ha]")
+  ),]
+  p_dat <- p_dat[!is.na(variable2)]
+  # p_dat[variable %in% c("ba", "trees", "reg"), value := value/patch_size,]
+  p_dat[variable %in% c("ba", "trees"), value := value/patch_size,]
+  p <- ggplot(p_dat[year <= 100], aes(x = year, y = value, color = factor(species))) +
+    geom_line(linewidth = 1) +
+    labs(x = "Year", y = "Value") +
+    coord_cartesian(ylim = c(0, NA)) +
+    facet_wrap(~variable2, scales = "free_y", ncol = 2, strip.position = "left") +  # Remove label_parsed
     theme_classic() +
-    labs(x = "Inventory Period", y = NULL) + # remove the default y label
     theme(
-      strip.placement = "outside",        # place strip label fully outside the panel
-      strip.background = element_blank(),     # Remove the facet label box
-      strip.text.y    = element_text(angle = 0),
-      strip.text.x = element_blank(),
-      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      strip.placement = "outside",
+      strip.text.y.left = element_text(angle = 90),
+      strip.background = element_blank(),
       legend.position = "bottom"
+      # legend.position.inside = c(0.9,0.2),
+      # legend.background = element_rect(color = "black", fill = NA)
     ) +
-    guides(
-      shape = guide_legend(title = element_blank(), direction = "vertical"),
-      linetype = guide_legend(title = element_blank(), direction = "vertical")
-      )+
-    scale_x_continuous(breaks = seq(min(i_pdat$year2), max(i_pdat$year2), by = 5))
-    p_list[[j_type]][["lineplot"]] <- p1+theme(legend.position = "none")
+    # guides(color = guide_legend(title = fifelse(grepl("pred_", i),"PFT","Random Species"), override.aes = list(linewidth = 5), ncol = 2, title.position = "top")) +
+    scale_color_discrete(name = fifelse(grepl("pred_", i),"PFT","Random Species"))
+    # ggtitle(paste0("patches = ",gsub("patches_", "", i)))
+    legend_p <- get_legend(p)
+    p_list[[i]] <- p+theme(legend.position = "none")
+  # }
 }
-p1b = ggplot(p_dat2cast[!is.na(observation)], aes(x = year2, y = prediction-observation)) +
-  geom_hline(yintercept = 0, linetype = "solid", color = "grey50", linewidth = 1)+
-  geom_point(aes(shape = type, color = factor(species)), size = 3) +
-  # geom_point(data = p_dat2[type != j_type,], aes(x = year2, y = value), alpha = 0.1)+
-  geom_line(aes(linetype = type, color = factor(species))) +
-  scale_shape_manual(values = c(process = 1, hybrid = 2)) +
-  scale_linetype_manual(values = c(process = "dashed", hybrid = "dotted"))+
-  facet_wrap(
-    ~ variable2,
-    scales        = "free_y", # keep each facet's y-scale
-    ncol          = 1,        # stack facets vertically
-    strip.position = "left",   # move strips from top to the left
-    labeller = label_parsed
-  ) +
-  scale_color_manual(name = "PFT", values = c(scales::hue_pal()(5), "black")) +
-  theme_classic() +
-  labs(x = "Inventory Period", y = NULL) + # remove the default y label
-  theme(
-    strip.placement = "outside",        # place strip label fully outside the panel
-    strip.background = element_blank(),     # Remove the facet label box
-    strip.text.y    = element_text(angle = 0),
-    strip.text.x = element_blank(),
-    axis.title.x = element_blank(),
-    legend.position = "bottom"
-  ) +
-  guides(
-    shape = guide_legend(title = element_blank(), direction = "vertical"),
-    linetype = guide_legend(title = element_blank(), direction = "vertical")
-  )+
-  scale_x_continuous(breaks = seq(min(p_dat2cast$year2), max(p_dat2cast$year2), by = 5))
-p1b_legend = get_legend(p1b)
-p1b = p1b+theme(legend.position = "none")
-all_cors[,type2 := factor(type, levels = c("process", "hybrid"), labels = c("Process", "Hybrid")),]
-p2 = 
-ggplot(all_cors, aes(x = type2, y = spearmans_r, color = species))+
-  geom_hline(yintercept = c(-1,0,1), linetype = "solid", color = "grey50", linewidth = 1)+
-  geom_boxplot(position = position_dodge())+
-  labs(x = "", y = "Spearmans R")+
-  theme_classic()+
-  facet_wrap(~variable, ncol = 1)+
-  coord_cartesian(ylim = c(-1,1))+
-  # fully remove stip
-  theme(strip.background = element_blank(),
-        strip.text.x = element_blank(),
-        strip.text.y = element_blank(),
-        axis.title.x = element_blank(),
-        legend.position = "bottom")+
-  #move y axis from left side to right side
-  scale_y_continuous(position = "right", breaks = c(-1,0,1))+
-  scale_color_manual(name = "PFT", values = c(scales::hue_pal()(5),"black"))
 
-p_list[["cv_cor"]] <- 
-  p2+theme(
-    legend.position = "none"
-    )
+grid.arrange(
+  grobs = c(
+    list(label_grob_f("a"), label_grob_f("b")),
+    p_list[1:2], list(legend_p)),
+  ncol = 2,
+  layout_matrix = rbind(c(1, 2), c(3, 4), c(5,5)),
+  heights = c(0.05, 0.95,0.1)
+)
+
+```
+
+### BCI PFT
+
+```{r}
+#| label: fig-Fig_2a
+#| fig-format: pdf
+#| fig-width: 10
+#| fig-height: 6
+#| echo: false
+#| silent: true
+#| message: false
+#| warning: false
+#| fig-cap: "Parameter recovery from 1000 replicate simulations and refits of the full model using five‑fold spatial cross‑validation. Blue half‑violin/half‑box plots show the distribution of estimation errors (posterior mean of the fitted parameter minus its true value). a) Process‑level parameters: errors grouped by ecological process (competition, growth, mortality, regeneration) and shown for the corresponding process parameters (e.g., compHeight, growthLight, mortSize). b) Environmental parameter estimates: errors for the weights associated with the intercept and six climatic covariates (Prec, SR_kW_m2, RH_prc, T_max, T_min, swp) within each process. Because the neural‑network component consists of a single linear layer, these weights are equivalent to classical multivariate linear‑regression coefficients. The red horizontal line indicates perfect recovery (error = 0)."
+
+## Simulate equilibrium from fitted models
+# load fitted BCI models
+hybrid_m = torch::torch_load(fitted_models[grepl("hybrid",fitted_models)])
+process_m = torch::torch_load(fitted_models[!grepl("hybrid",fitted_models)])
+
+i_name = "pft-period7-25patches"
+# # read full raw data
+# obs_dt2 = fread(paste0("data/BCI/noSplits/", i_name,"/obs_dt.csv"))
+# obs_dt = fread(paste0("data/BCIsecf/stand_dt_secf.csv"))
+# cohorts_dt2 = fread(paste0("data/BCI/noSplits/", i_name,"/initial_cohorts1985.csv"))
+# cohorts_dt = fread(paste0("data/BCIsecf/initial_cohorts_10patches_0.1ha_age40.csv"))
+# cohorts_dt$dbh = cohorts_dt$dbh_cm
+env_dt = fread(paste0("data/BCI/noSplits/", i_name,"/env_dt.csv"))
+# obs_dt = fread(paste0("data/BCI/noSplits/", i_name,"/obs_dt.csv"))
+
+# predict for model
+# cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = uniqueN(obs_dt$species))
+
+# create artificial time series
+env_dt_long <- data.table()
+start_t = 0
+for(k in 1:20){
+  env_dt_temp = copy(env_dt)
+  # randomly shuffle years in env_dt
+  env_dt_temp$year = env_dt_temp$year+start_t
+  env_dt_temp[,year := year[sample(length(year))], by = siteID]
+  # env_dt_temp$year = env_dt_temp$year[sample(length(env_dt_temp$year), replace = F)]
+  env_dt_long = rbind(env_dt_long, env_dt_temp)
+  start_t = max(env_dt_long$year)
+  # if(start_t > ceiling(80/uniqueN(env_dt$year))) break
+}
+# env_dt_long$swp = 0
+# env_dt_long[,":="(
+#   Prec = mean(Prec),
+#   SR_kW_m2 = mean(SR_kW_m2),
+#   RH_prc = mean(RH_prc),
+#   T_max = mean(T_max),
+#   T_min = mean(T_min)
+# ), by = siteID]
+# here we specify a disturbance frequency of 1%, which means that there is a 1% chance each year that a disturbance occurs
+disturbance_frequency = 1
+
+Ntimesteps = uniqueN(env_dt_long$year)
+Ntimesteps = max(env_dt_long$year)
+Nsites = uniqueN(env_dt_long$siteID)
+# the disturbance intensity at each timestep is the fraction of patches that is disturbed at that time step
+# here we specify a disturbance frequency of 1%, which means that there is a 1% chance each year that a disturbance occurs
+disturbance_intensity = runif(Ntimesteps*Nsites, 0.0043, 0.016)
+length(disturbance_intensity)
+dist_dt <- env_dt_long[,.(siteID, year)]
+# this will result in 0 to 20 % of the patches being disturbed at each timestep with a change of 1% that a disturbance occurs at the timestep
+dist_dt$intensity = rbinom(Ntimesteps*Nsites, 1, disturbance_frequency)*disturbance_intensity
+
+pred_hybrid = hybrid_m$simulate(env = env_dt_long, disturbance = dist_dt, init_cohort = NULL, patches = 20, patch_size = 0.1)
+
+pred_process = process_m$simulate(env = env_dt_long, disturbance = dist_dt, init_cohort = NULL, patches = 20, patch_size = 0.1)
+
+predictions = list()
+predictions[["pred_hybrid"]] = pred_hybrid
+predictions[["pred_process"]] = pred_process
+p_list = list()
+for(i in c("pred_hybrid","pred_process")){
+  p_dat <- predictions[[i]]$long$site[, .(value = mean(value)), by = .(year = 1+(year-1)*5, species, variable)]
+  p_dat$model = i
   
-p1_legend <- get_legend(p1)
-p2_legend <- get_legend(p2)
-p1to3_legend <- get_legend(p1_legende_basis)
-# load package for textGrob
-library(grid)
-label_grob_f = function(x){
-  textGrob(x, x = unit(0.05, "npc"), y = unit(0.95, "npc"), just = c("left", "top"), gp = gpar(fontsize = 16, fontface = "bold"))
+  p_dat[, variable2 := factor(
+  variable,
+  levels = c("dbh", "ba", "trees", "AL", "growth", "mort", "r_mean_ha"),
+  labels =  c("avg. DBH [cm]", "Basal Area [m²/ha]", "Trees [N/ha]", 
+              "Available Light [%]", "Growth [%/100]", "Mortality [%/100]", 
+              "Reg. Mean [N/ha]")
+  ),]
+  p_dat <- p_dat[!is.na(variable2)]
+  p_dat[variable %in% c("ba", "trees"), value := value/patch_size,]
+  p <- ggplot(p_dat, aes(x = year, y = value, color = factor(species))) +
+    geom_line(linewidth = 1) +
+    labs(x = "Year", y = "Value") +
+    coord_cartesian(ylim = c(0, NA)) +
+    facet_wrap(~variable2, scales = "free_y", ncol = 2, strip.position = "left") +  # Remove label_parsed
+    theme_classic() +
+    theme(
+    axis.title.y = element_blank(),
+    strip.placement = "outside",
+    strip.text.y.left = element_text(angle = 90),
+    strip.background = element_blank(),
+    legend.position = "bottom"
+    # legend.position.inside = c(0.9,0.2),
+    # legend.background = element_rect(color = "black", fill = NA)
+  ) +
+    # ylab("Basal Area [m²/ha]") +
+    scale_color_discrete(name = fifelse(grepl("pred_", i),"PFT","Random Species"))
+    # ggtitle(paste0("patches = ",gsub("patches_", "", i)))
+  legend_p <- get_legend(p)
+  p_list[[i]] <- p+theme(legend.position = "none")
 }
 
-gridExtra::grid.arrange(
-  grobs = list(
-    label_grob_f("a"), label_grob_f("b"), label_grob_f("c"), label_grob_f("d"),
-    p_list$process$lineplot, p_list$hybrid$lineplot, p1b, p_list$cv_cor,
-    p1to3_legend
-    ), 
-  layout_matrix = rbind(
-    c(1,2,3,4),
-    c(5,6,7,8),
-    c(9,9,9,9)),
-  # include letters to each plot
-  widths = c(0.6,0.6,0.6,0.4), 
-  heights = c(0.05,0.95,0.15))
+grid.arrange(
+  grobs = c(
+    list(label_grob_f("a"), label_grob_f("b")),
+    p_list[1:2], list(legend_p)),
+  ncol = 2,
+  layout_matrix = rbind(c(1, 2), c(3, 4), c(5,5)),
+  heights = c(0.05, 0.95,0.1)
+)
+
+
 
 ```
 
 
+
+
+## Figure 3 (Recovery)
+
 ```{r}
-#| label: fig-Fig_4
-#| fig-format: svg
-#| fig-width: 13
-#| fig-height: 10
+#| label: fig-Fig_3
+#| fig-format: pdf
+#| fig-width: 10
+#| fig-height: 6
 #| echo: false
 #| silent: true
 #| message: false
@@ -412,25 +474,19 @@ log_mod_trans <- function(base = exp(1)) {
   )
 }
 
-# -----------------------------------------------------------
-# 2)  Beispielplot mit log_mod‐Skala, Original‑Labels
-# -----------------------------------------------------------
-ggplot(diffs_df, aes(y = par, x = diff)) +
-  geom_boxplot() +
-  labs(y = "Parameter", x = "Difference") +
-  scale_x_continuous(
-    trans  = log_mod_trans(),           # ← hier anwenden
-    breaks = pretty_breaks(n = 7)       # (optional) schönere Tick‑Abstände
-  ) +
-  theme_minimal()
+# # -----------------------------------------------------------
+# # 2)  Beispielplot mit log_mod‐Skala, Original‑Labels
+# # -----------------------------------------------------------
+# ggplot(diffs_df, aes(y = par, x = diff)) +
+#   geom_boxplot() +
+#   labs(y = "Parameter", x = "Difference") +
+#   scale_x_continuous(
+#     trans  = log_mod_trans(),           # ← hier anwenden
+#     breaks = pretty_breaks(n = 7)       # (optional) schönere Tick‑Abstände
+#   ) +
+#   theme_minimal()
 
-library(ggplot2)
-library(ggbeeswarm)
-library(gghalves)
-library(data.table)
-names(diffs_df)
 diffs_dt <- data.table(diffs_df)
-unique(diffs_df$par)
 diffs_dt[grepl("competition",par),process := "competition",]
 diffs_dt[grepl("competition_r1",par),name := "compHeight",]
 diffs_dt[grepl("competition_r2",par),name := "compStr",]
@@ -460,13 +516,14 @@ diffs_dt[type == "environment parameter",name := gsub("weight","",tstrsplit(par,
 diffs_dt[,name := factor(name, levels = c("intercept", unique(diffs_dt[name != "intercept"]$name))),]
 
 p_proc <- ggplot(diffs_dt[type == "process parameter"], aes(x = name, y = diff)) +
-  # see::geom_violinhalf(scale = "width", flip = T)+
   geom_hline(yintercept = 0, color = "red") +
-  geom_half_violin(scale = "width", fill = "blue")+
-  geom_half_boxplot(side = "r", outlier.shape = NA)+
+  geom_quasirandom(alpha = 0.1, method = "pseudorandom", color = "#A8C4E0")+
+  # geom_violin(fill = NA, color = "black", scale = "width")+
   facet_wrap(~process, ncol = 2, scales = "free") +
   labs(x = "Parameter", y = "Difference")+
-  theme_classic()
+  theme_classic()+
+  geom_boxplot(width = 0.2, outlier.shape = NA)+
+  theme(axis.title.x = element_blank())
 
 fac_levels = c("intercept","Prec","SR_kW_m2","RH_prc","T_max","T_min","swp")
 
@@ -475,11 +532,13 @@ p_env <- ggplot(diffs_dt[type == "environment parameter"],
        ) +
   # see::geom_violinhalf(scale = "width", flip = T)+
   geom_hline(yintercept = 0, color = "red") +
-  geom_half_violin(scale = "width", fill = "blue")+
-  geom_half_boxplot(side = "r", outlier.shape = NA)+
+  geom_quasirandom(alpha = 0.1, method = "pseudorandom", color = "#A8C4E0")+
+  # geom_violin(fill = NA, color = "black", scale = "width")+
   facet_wrap(~process, ncol = 1, scales = "free") +
   labs(x = "Parameter", y = "Difference")+
-  theme_classic()
+  theme_classic()+
+  geom_boxplot(width = 0.2, outlier.shape = NA)+
+  theme(axis.title.x = element_blank())
 
 
 gridExtra::grid.arrange(
@@ -498,7 +557,434 @@ gridExtra::grid.arrange(
 
 ```
 
+## Figure 4 (model fit)
 
+```{r}
+#| label: fig-Fig_4
+#| fig-format: pdf
+#| fig-width: 13
+#| fig-height: 10
+#| echo: false
+#| silent: true
+#| message: false
+#| warning: false
+#| fig-cap: "Observed and predicted forest structure and demographic rates for five PFTs. a) and b) display the observed values (straight line & crosses) vs the predicted values from the process model (dashed line & circles) and the hybrid model (dotted line & triangles), respectively. c) shows the absolute difference between the observed values and the predictions of the process and hybrid model. d) shows the calculated pearson correlation from the five-fold blocked spatial cross-validation. The first two rows show the observed and predicted values for basal area and tree density. The third and fourth row show the observed and predicted values for diameter at breast height (dbh), regeneration, growth, and mortality."
+
+chosen_scale = "pft-period7-25patches"
+
+# fitted_models_fig4 <- c(
+#     list.files("results/02_realdata/", full.names = T, recursive = T, pattern = chosen_scale),
+#     list.files("results/02_realdata_hybridTF0/", full.names = T, recursive = T, pattern = chosen_scale),
+#     list.files("results/02_realdata_hybridSmall/", full.names = T, recursive = T, pattern = chosen_scale),
+#     list.files("results/02_realdata_hybridSmallDropout/", full.names = T, recursive = T, pattern = chosen_scale),
+#     list.files("results/02_realdata_hybridMedium/", full.names = T, recursive = T, pattern = chosen_scale),
+#     list.files("results/02_realdata_hybridMediumDropout/", full.names = T, recursive = T, pattern = chosen_scale)
+# )
+# 
+# fitted_models_fig4 <- fitted_models_fig4[grepl("S0_T0",fitted_models_fig4)]
+
+fitted_models_fig4 <- fitted_models
+
+## create fit simulations
+fit_process = build_model_dt(pt_file = fitted_models_fig4[1])[[1]]
+
+for(i_hybrid_model in fitted_models_fig4[grepl("hybrid",fitted_models_fig4)]){
+  
+  fit_hybrid = build_model_dt(pt_file = i_hybrid_model)[[1]]
+  all_dt = rbind(
+    data.table(fit_process[test_train == "train"], type = "process"),
+    data.table(fit_hybrid[test_train == "train"], type = "hybrid")
+  )
+  period_length = unique(all_dt[!is.na(period_length)]$period_length)
+  all_dt <- all_dt[,-c("period_length")]
+  
+  all_dt2 <- melt(all_dt, id.vars = c("type","siteID","year","species","test_train"))
+  all_dt2[grepl("pred",variable), pred_obs := "pred",]
+  all_dt2[grepl("obs",variable), pred_obs := "obs",]
+  all_dt2[, variable := gsub(".obs|.pred","",variable),]
+  
+  p_dat <- all_dt2[test_train == "train",.(value = mean(value,na.rm = T)), by = .(type,year,species,test_train, pred_obs, variable)]
+  p_dat2 <- p_dat[!is.na(value)]
+  
+  p_dat2_all <- 
+    rbind(
+      p_dat2[variable %in% c("ba", "trees"),.(
+        value = sum(value, na.rm = T),
+        species = "all"
+      ), by = .(type, year, test_train, pred_obs, variable)],
+      p_dat2[variable %in% c("dbh", "reg","growth","mort"),.(
+        value = mean(value, na.rm = T),
+        species = "all"
+      ), by = .(type, year, test_train, pred_obs, variable)]
+    )
+  
+  p_dat2 <- rbind(
+    p_dat2,
+    p_dat2_all
+  )
+  
+  p_dat2[variable %in% c("ba", "trees"), value := value/0.1,]
+  p_dat2[variable %in% c("mortality", "growth"), value := value/5*100,]
+  
+  # create cv simulations
+  # fitted_models_fig4 <- fitted_models_fig4[!grepl("S0_T0",fitted_models_fig4)]
+  # fitted_models_fig4_cv <- fitted_models_fig4[!grepl("S0_T0",fitted_models_fig4) & grepl("T0",fitted_models_fig4)]
+  
+  cors_fullPlot = fread("results/cors_fullPlot.csv")
+  cors_fullPlotSpecies <- fread("results/cors_fullPlotSpecies.csv")
+  
+  all_cors <- rbind(
+    data.table(cors_fullPlot, species = "all"),
+    cors_fullPlotSpecies
+  )
+  
+  all_cors <- all_cors[scale == chosen_scale & grepl("T0", cv),]
+  all_cors[data == strsplit(i_hybrid_model,"/")[[1]][2],type := "hybrid",]
+  all_cors[data == "02_realdata",type := "process",]
+  all_cors[, type := factor(type, levels = c("process", "hybrid"), ordered = T),]
+  all_cors <- all_cors[!is.na(type)]
+  all_cors[,species := factor(species, levels = c(sort(unique(all_cors$species)))),]
+  
+  vars = c("ba", "trees", "dbh", "reg","growth","mort")
+  var_labels <- c(
+    expression(basal~area~(m^2~ha^-1)),
+    expression(trees~(ha^-1)),
+    expression(dbh~(cm)),
+    expression(regeneration~(ha^-1)),
+    expression(growth~(m^3~ha^-1~yr^-1)),
+    expression(mortality~(m^3~ha^-1~yr^-1))
+  )
+  var_labels2 <- c(
+    "basal~area~(m^2~ha^-1)",
+    "trees~(ha^-1)",
+    "dbh~(cm)",
+    "regeneration~(ha^-5)",
+    "growth~('%'~yr^-1)",
+    "mortality~('%'~yr^-1)"
+  )
+  p_dat2[,variable2 := factor(
+    variable, 
+    levels = vars,
+    labels = var_labels2),]
+  
+  
+  p_dat2[, pred_obs2 := factor(pred_obs, levels = c("obs","pred"), labels = c("observation","prediction")) ,]
+  
+  if(grepl("period35",chosen_scale)){
+    p_dat2[, year2 := 1984+year,]
+  }else{
+    p_dat2[, year2 := 1985+year*5,]
+  }
+  
+  p_dat2cast <- dcast(p_dat2, type + year2 + variable2 + species ~ pred_obs2, value.var = "value")
+  p_dat2[,type2 := type,]
+  p_dat2[pred_obs == "obs",type2 := "observation",]
+  p_dat2[,type2 := factor(type2, levels = c("observation", "process", "hybrid"), 
+                          labels = c("Observed", "Predicted (Process Model)", "Predicted (Hybrid Model)")),]
+  
+  p1_legende_basis =
+    ggplot(p_dat2, aes(x = year2, y = value)) +
+    geom_point(aes(shape = type2, color = factor(species)), size = 3) +
+    geom_line(aes(linetype = type2, color = factor(species))) +
+    scale_shape_manual(values = c(4, 1, 2)) +
+    scale_linetype_manual(values = c("solid", "dashed", "dotted")) +
+    scale_color_manual(name = "PFT", values = c(scales::hue_pal()(5), "black"))+
+    theme_classic()+
+    theme(
+        strip.placement = "outside",        # place strip label fully outside the panel
+        strip.background = element_blank(),     # Remove the facet label box
+        strip.text.y    = element_text(angle = 0),
+        strip.text.x = element_blank(),
+        legend.position = "bottom",
+        legend.title.position = "left"
+      ) +
+      guides(
+        shape = guide_legend(position = "bottom", direction = "vertical", title = "Observation / Model Type"),
+        linetype = guide_legend(position = "bottom",direction = "vertical", title = "Observation / Model Type")
+        )
+  
+  p_list <- list()
+  for(j_type in c("process","hybrid")){
+    i_pdat = p_dat2[type == j_type,]
+    j_linetype = ifelse(j_type == "process", "dashed", "dotted")
+    j_pointtype = ifelse(j_type == "process", 1, 2)
+    p1 =
+      ggplot(i_pdat, aes(x = year2, y = value)) +
+      geom_point(aes(shape = pred_obs2, color = factor(species)), size = 3) +
+      geom_point(data = p_dat2[type != j_type,], aes(x = year2, y = value), color = NA)+
+      geom_line(aes(linetype = pred_obs2, color = factor(species))) +
+      scale_shape_manual(values = c(4,j_pointtype)) +
+      scale_linetype_manual(values = c("solid", j_linetype)) +
+      facet_wrap(
+        ~ variable2,
+        scales        = "free_y", # keep each facet's y-scale
+        ncol          = 1,        # stack facets vertically
+        strip.position = "left",   # move strips from top to the left
+        labeller = label_parsed
+      ) +
+      scale_color_manual(name = "PFT", values = c(scales::hue_pal()(5), "black")) +
+      theme_classic() +
+      labs(x = "Inventory Period", y = NULL) + # remove the default y label
+      theme(
+        strip.placement = "outside",        # place strip label fully outside the panel
+        strip.background = element_blank(),     # Remove the facet label box
+        strip.text.y    = element_text(angle = 0),
+        strip.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        legend.position = "bottom"
+      ) +
+      guides(
+        shape = guide_legend(title = element_blank(), direction = "vertical"),
+        linetype = guide_legend(title = element_blank(), direction = "vertical")
+        )+
+      scale_x_continuous(breaks = seq(min(i_pdat$year2), max(i_pdat$year2), by = 5))
+      p_list[[j_type]][["lineplot"]] <- p1+theme(legend.position = "none")
+  }
+  p1b = ggplot(p_dat2cast[!is.na(observation)], aes(x = year2, y = prediction-observation)) +
+    geom_hline(yintercept = 0, linetype = "solid", color = "grey50", linewidth = 1)+
+    geom_point(aes(shape = type, color = factor(species)), size = 3) +
+    # geom_point(data = p_dat2[type != j_type,], aes(x = year2, y = value), alpha = 0.1)+
+    geom_line(aes(linetype = type, color = factor(species))) +
+    scale_shape_manual(values = c(process = 1, hybrid = 2)) +
+    scale_linetype_manual(values = c(process = "dashed", hybrid = "dotted"))+
+    facet_wrap(
+      ~ variable2,
+      scales        = "free_y", # keep each facet's y-scale
+      ncol          = 1,        # stack facets vertically
+      strip.position = "left",   # move strips from top to the left
+      labeller = label_parsed
+    ) +
+    scale_color_manual(name = "PFT", values = c(scales::hue_pal()(5), "black")) +
+    theme_classic() +
+    labs(x = "Inventory Period", y = NULL) + # remove the default y label
+    theme(
+      strip.placement = "outside",        # place strip label fully outside the panel
+      strip.background = element_blank(),     # Remove the facet label box
+      strip.text.y    = element_text(angle = 0),
+      strip.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      legend.position = "bottom"
+    ) +
+    guides(
+      shape = guide_legend(title = element_blank(), direction = "vertical"),
+      linetype = guide_legend(title = element_blank(), direction = "vertical")
+    )+
+    scale_x_continuous(breaks = seq(min(p_dat2cast$year2), max(p_dat2cast$year2), by = 5))
+  p1b_legend = get_legend(p1b)
+  p1b = p1b+theme(legend.position = "none")
+  all_cors[,type2 := factor(type, levels = c("process", "hybrid"), labels = c("Process", "Hybrid")),]
+  all_cors[,variable:= factor(variable, levels = c("ba","trees","dbh","reg", "growth", "mort"),ordered = T)]
+  p2 = 
+  ggplot(all_cors, aes(x = type2, y = spearmans_r, color = species))+
+    geom_hline(yintercept = c(-1,0,1), linetype = "solid", color = "grey50", linewidth = 1)+
+    geom_boxplot(position = position_dodge())+
+    labs(x = "", y = "Spearmans R")+
+    theme_classic()+
+    facet_wrap(~variable, ncol = 1)+
+    coord_cartesian(ylim = c(-1,1))+
+    # fully remove stip
+    theme(strip.background = element_blank(),
+          strip.text.x = element_blank(),
+          strip.text.y = element_blank(),
+          axis.title.x = element_blank(),
+          legend.position = "bottom")+
+    #move y axis from left side to right side
+    scale_y_continuous(position = "right", breaks = c(-1,0,1))+
+    scale_color_manual(name = "PFT", values = c(scales::hue_pal()(5),"black"))
+  
+  p_list[["cv_cor"]] <- 
+    p2+theme(
+      legend.position = "none"
+      )
+    
+  p1_legend <- get_legend(p1)
+  p2_legend <- get_legend(p2)
+  p1to3_legend <- get_legend(p1_legende_basis)
+  gridExtra::grid.arrange(
+    grobs = list(
+      label_grob_f("a"), label_grob_f("b"), label_grob_f("c"), label_grob_f("d"),
+      p_list$process$lineplot, p_list$hybrid$lineplot, p1b, p_list$cv_cor,
+      p1to3_legend
+      ), 
+    layout_matrix = rbind(
+      c(1,2,3,4),
+      c(5,6,7,8),
+      c(9,9,9,9)),
+    # include letters to each plot
+    widths = c(0.6,0.6,0.6,0.4), 
+    heights = c(0.05,0.95,0.15))
+}
+
+
+```
+
+## Figure 5 (xAI)
+
+
+## Figure 6
+
+```{r}
+#| label: fig-Fig_6
+#| fig-format: pdf
+#| fig-width: 10
+#| fig-height: 10
+#| echo: false
+#| silent: true
+#| message: false
+#| warning: false
+#| fig-cap: ""
+
+ba_dt = 
+  data.table(
+    expand.grid(
+      list(
+        trees = 1:1000,
+        dbh = seq(0, 100,1)
+      )
+    )
+  )
+
+ba_dt$rowID = 1:nrow(ba_dt)
+ba_dt[, ba := BA_stand(dbh, trees,1), by = rowID]
+
+p_ba =
+  ggplot(ba_dt, aes(x = dbh, y = trees, fill = ba)) +
+  geom_tile() +
+  scale_fill_gradientn(
+    colours = rev(viridis::viridis(100)),
+    limits = c(0, 100),
+    na.value = rev(viridis::viridis(100))[100],
+    breaks = seq(0, 100, 20),
+    labels = c(seq(0, 80, 20),">100"),
+    name = "Basal Area\n[m2/ha]"
+  )+
+  xlab("dbh [cm]")+
+  ylab("trees [ha]")+
+  theme_classic()
+
+height_dt =
+  data.table(
+    expand.grid(
+      list(
+        dbh = seq(0, 300,1),
+        parHeight = seq(0,1,0.2)
+      )
+    )
+  )
+
+height_dt$rowID = 1:nrow(height_dt)
+height_dt[, height := height(dbh, parHeight), by = rowID]
+
+p_height <-
+  ggplot(height_dt, aes(x = dbh, y = height, color = factor(parHeight, ordered = T)))+
+  ylab("height(dbh,parHeight)")+
+  xlab("dbh [cm]")+
+  geom_line()+
+  theme_classic()+
+  scale_color_discrete(name = "parHeight")
+
+## Competition
+parHeight_vec = c(0.7)
+parCompStr = c(0.1,0.2,0.3)
+parComp = cbind(parHeight_vec, parCompStr)
+
+cohort_layers_dt <- data.table(
+  name = c("understory", "midstory", "overstory"),
+  trees = c(1000, 300, 50),
+  dbh = c(5, 30, 90),
+  dbh_shape = c(2, 4, 5)
+)
+
+cohort_layers1_dt <- data.table()
+for(i_c in 1:nrow(cohort_layers_dt)){
+  dbh = cohort_layers_dt$dbh[i_c]
+  trees = cohort_layers_dt$trees[i_c]
+  dbh_shape = cohort_layers_dt$dbh_shape[i_c]
+  temp_cohort_df1 = data.table(FINN::rweibull_cohorts(trees = trees, dbh_shape = dbh_shape, dbh_scale = dbh, dbh_class_range = 0.1, species = 1, siteID = 1))
+  temp_cohort_df1$cohortID = paste0(i_c,"_",temp_cohort_df1$cohortID)
+  temp_cohort_df1$trees_ha = trees
+  temp_cohort_df1$mean_dbh = dbh
+  temp_cohort_df1$dbh_shape = dbh_shape
+  temp_cohort_df1$name = cohort_layers_dt$name[i_c]
+  cohort_layers1_dt <- rbind(cohort_layers1_dt,temp_cohort_df1)
+}
+
+cohort_layers2_dt <- data.table()
+counter = 0
+for(sp in 1:nrow(parComp)){
+  counter = counter + 1
+  temp_cohort_df2 = copy(cohort_layers1_dt)
+  temp_cohort_df2$siteID = counter
+  temp_cohort_df2$species = sp
+  temp_cohort_df2$parCompStr = parCompStr[sp]
+  cohort_layers2_dt <- rbind(cohort_layers2_dt, temp_cohort_df2)
+}
+
+cohort_layers2_dt[,cohortID := as.integer(as.factor(cohortID)), by = siteID]
+cohort_layers2_dt$cohortID = as.integer(cohort_layers2_dt$cohortID)
+cohort_layers2_dt = cohort_layers2_dt[order(cohortID)]
+
+cohort = CohortMat$new(obs_df = cohort_layers2_dt)
+basal_area = BA_stand(cohort$dbh, cohort$trees, patch_size_ha = 1)
+
+light = competition(dbh = cohort$dbh, species = cohort$species,
+                    trees = cohort$trees, parComp = torch::torch_tensor(parComp),
+                    h = NULL, patch_size_ha = 1)
+
+for(i_site in unique(cohort_layers2_dt$siteID)){
+  cohort_layers2_dt[siteID == i_site, basal_area2 := torch::as_array(basal_area)[i_site,1,1:nrow(cohort_layers2_dt[siteID == i_site])]]
+  cohort_layers2_dt[siteID == i_site, light2 := torch::as_array(light)[i_site,1,1:nrow(cohort_layers2_dt[siteID == i_site])]]
+}
+
+cohort_layers2_dt[,":="(ba = round(sum(basal_area2))), by = .(siteID, name)]
+cohort_layers2_dt[,":="(dbh_density = dweibull(dbh,shape = dbh_shape, scale = mean_dbh)), by = .(name)]
+cohort_layers2_dt[,name := factor(name, levels = c("understory", "midstory", "overstory"), ordered = T),]
+
+label_dt <- cohort_layers2_dt[,.(mean_dbh = mean(dbh), ba = round(sum(basal_area2)), max_density = max(dbh_density)), by = .(siteID, name)]
+
+p_cohorts = ggplot(cohort_layers2_dt)+
+  geom_histogram(aes(x = dbh, fill = name, y = ..density..), alpha = 0.3)+
+  geom_line(aes(x = dbh, y = dbh_density, color = name), linewidth = 1)+
+  # facet_wrap(~siteID)+
+  geom_text(data = label_dt, aes(x = mean_dbh, y = max_density+0.03, label = paste0(name,"\n"," ba = ", ba), color = name), size = 5)+
+  guides(
+    color = guide_legend(title = "layer", override.aes = list(label = "")),
+    fill = guide_legend(title = "layer")
+    )+
+  xlab("dbh [cm]") +
+  theme_bw()+
+  coord_cartesian(ylim = c(0, max(label_dt$max_density)+0.05))+
+  theme(legend.position = "none", axis.text.y = element_blank(), axis.ticks.y = element_blank())
+
+p_light = ggplot(cohort_layers2_dt)+
+  geom_boxplot(aes(x = name, y = light2, color = name), linewidth = 1)+
+  facet_wrap(~factor(siteID, levels = 1:3, labels = paste("parCompStr =", c(parComp[,2]))))+
+  # add axis labels
+  xlab("layer") +
+  ylab("light [%]") +
+  theme_classic()+
+  theme(legend.position = "none", axis.title.x = element_blank())
+
+gridExtra::grid.arrange(
+  grobs = list(
+    label_grob_f("a"), label_grob_f("b"), label_grob_f("c"), label_grob_f("d"),
+    p_ba, p_height, p_cohorts, p_light
+  ), 
+  layout_matrix = rbind(
+    c(1,2),
+    c(5,6),
+    c(3,NA),
+    c(7,7),
+    c(4,NA),
+    c(8,8)
+  ),
+  # include letters to each plot
+  widths = c(0.6,0.6), 
+  heights = c(0.05,0.95,0.05,0.95,0.05,0.95)
+)
+
+
+```
 
 
 
