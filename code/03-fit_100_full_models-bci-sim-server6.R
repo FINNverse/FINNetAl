@@ -1,17 +1,17 @@
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
 ## get index of array ####
 #=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=#=
-args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 1) {
-  stop("No batch index provided. Please provide a batch index as an argument.")
-}
+# args <- commandArgs(trailingOnly = TRUE)
+# if (length(args) < 1) {
+#   stop("No batch index provided. Please provide a batch index as an argument.")
+# }
 # batch_index <- 1
-batch_index <- as.integer(args[1])
+# batch_index <- as.integer(args[1])
 # Each batch contains 4 indices; for example, batch 1 -> 1:4, batch 2 -> 5:8, etc.
-jobs_per_process = 6L
-subset_indices <- (((batch_index - 1) * jobs_per_process) + 1):(batch_index * jobs_per_process)
-cat("Running batch index:", batch_index, "\n")
-cat("Processing tasks with indices:", paste(subset_indices, collapse = ", "), "\n")
+# jobs_per_process = 6L
+# subset_indices <- (((batch_index - 1) * jobs_per_process) + 1):(batch_index * jobs_per_process)
+# cat("Running batch index:", batch_index, "\n")
+# cat("Processing tasks with indices:", paste(subset_indices, collapse = ", "), "\n")
 
 library(data.table)
 library(FINN)
@@ -22,7 +22,7 @@ library(parallel)
 Nepochs = 8000
 overwrite = F
 simmodel_path = "results/01_full/pft-period7-25patches_full.pt"
-reps = 1:100
+reps = 108:900
 
 cat("\nscript started")
 all_jobs = list()
@@ -32,13 +32,14 @@ for(i_rep in reps){
   }
 }
 
-if(min(subset_indices) > length(all_jobs)) {
-  stop("Batch index exceeds available task indices (1:length(all_jobs)).")
-}
-subset_indices <- subset_indices[subset_indices <= length(all_jobs)]
-
-# Process only the subset for this batch
-.selected_variants <- all_jobs[subset_indices]
+# if(min(subset_indices) > length(all_jobs)) {
+#   stop("Batch index exceeds available task indices (1:length(all_jobs)).")
+# }
+# subset_indices <- subset_indices[subset_indices <= length(all_jobs)]
+#
+# # Process only the subset for this batch
+# .selected_variants <- all_jobs[subset_indices]
+.selected_variants <- all_jobs
 
 cl = parallel::makeCluster(12L)
 nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
@@ -57,7 +58,7 @@ parallel::clusterEvalQ(cl, {
 cat("\nscript started")
 # for(i_dir in directories){
 # for(i_cv in cv_variants){
-i_var = .selected_variants[[2]]
+# i_var = .selected_variants[[2]]
 parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environment())
 .null = parLapply(cl, .selected_variants, function(i_var){
   i_rep = i_var$rep
