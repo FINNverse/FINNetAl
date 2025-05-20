@@ -15,7 +15,7 @@ all_lossvars = c("ba", "trees", "dbh", "growth", "mort", "reg")
 # T_folds <- paste0("T",c(0, 1:2))
 # S_folds <- paste0("S", c(0, 1:5))
 T_folds <- paste0("T",c(0))
-S_folds <- paste0("S", c(1:5))
+S_folds <- paste0("S", c(0))
 transformer_folds = c("Small","SmallDropout","Medium","MediumDropout" )
 
 fold_names = expand.grid(list(S_folds,T_folds,transformer_folds))
@@ -38,7 +38,7 @@ for(i_dir in directories){
 
 # Process only the subset for this batch
 
-cl = parallel::makeCluster(16L)
+cl = parallel::makeCluster(4L)
 nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
 parallel::clusterEvalQ(cl, {

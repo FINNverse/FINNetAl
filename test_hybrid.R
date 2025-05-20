@@ -26,9 +26,9 @@ all_lossvars = c("ba", "trees", "dbh", "growth", "mort", "reg")
 
 # T_folds <- paste0("T",c(0, 1:2))
 # S_folds <- paste0("S", c(0, 1:5))
-T_folds <- paste0("T",c(0, 2))
-S_folds <- paste0("S", c(0, 3))
-transformer_folds = c("TF0","TF1")
+T_folds <- paste0("T",c(0))
+S_folds <- paste0("S", c(1:5))
+transformer_folds = c("TF0")
 
 fold_names = expand.grid(list(S_folds,T_folds,transformer_folds))
 fold_names = paste0(fold_names$Var1, "_", fold_names$Var2, "_", fold_names$Var3)
@@ -37,7 +37,7 @@ cv_variants <- paste0(rep(fold_names,each = length(unlist(lossvars_comb))),"_",u
 directories <- list.files("data/BCI/CVsplits-realdata", full.names = T)
 
 # directories <- directories[grepl("1patch", directories) & grepl("genus", directories)]
-directories = rev(directories)
+directories = directories[8]
 
 # for(i_dir in directories){
 #   for(i_cv in cv_variants){
@@ -58,13 +58,6 @@ for(i_dir in directories){
   }
 }
 
-if(min(subset_indices) > length(all_variants)) {
-  stop("Batch index exceeds available task indices (1:length(all_variants)).")
-}
-subset_indices <- subset_indices[subset_indices < length(all_variants)]
-
-# Process only the subset for this batch
-.selected_variants <- all_variants[subset_indices]
 
 cl = parallel::makeCluster(jobs_per_process)
 # nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
@@ -84,7 +77,7 @@ cat("\nscript started")
 # for(i_dir in directories){
 # for(i_cv in cv_variants){
 # i_var = .selected_variants[[2]]
-i_var = all_variants[[2]]
+i_var = all_variants[[1]]
 parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environment())
 .null = parLapply(cl, .selected_variants, function(i_var){
   i_dir = i_var$i_dir
@@ -117,14 +110,14 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
     
     cat("\nread data:", i_name)
     cat("\nCV variant:", i_cv)
-    env_dt = fread(paste0(i_dir,"/env_dt_",cv_S,"_",cv_T,"_train.csv"))
+    env_dt = fread(paste0(i_dir,"/env_dt_",cv_S,"_",cv_T,"_test.csv"))
     env_dt = env_dt[,.(siteID, year, Prec, SR_kW_m2, RH_prc, T_max, T_min, swp )]
     
-    obs_dt = fread(paste0(i_dir,"/obs_dt_",cv_S,"_",cv_T,"_train.csv"))
+    obs_dt = fread(paste0(i_dir,"/obs_dt_",cv_S,"_",cv_T,"_test.csv"))
     # only pick columns siteID species  year   dbh    ba trees growth  mort   reg r_mean_ha
     obs_dt = obs_dt[,.(siteID, species, year, dbh, ba, trees, growth, mort, reg)]
     
-    cohorts_dt = fread(paste0(i_dir,"/initial_cohorts_",cv_S,"_",cv_T,"_train.csv"))
+    cohorts_dt = fread(paste0(i_dir,"/initial_cohorts_",cv_S,"_",cv_T,"_test.csv"))
     # only pick columns siteID   dbh species patchID census trees cohortID
     cohorts_dt = cohorts_dt[,.(siteID, dbh, species, patchID, census, trees, cohortID)]
     
@@ -266,7 +259,7 @@ cat("\nscript finished")
 
 
 gh = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
-  #self$nn_growth$train()
+  self$nn_growth$train()
   g = (self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred) - exp(1))$exp()
   #print(g$var()$item())
   return(g)
@@ -281,7 +274,189 @@ m1$mortality_func = m1$.__enclos_env__$private$set_environment(mh)
 
 
 
-pred = m1$simulate(env = env_dt, patches = patches, init_cohort = cohort1)
+m1 = torch::torch_load("results/02_realdata_hybridSmall/pft-period7-25patches_S1_T0.pt")
+gh = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
+  self$nn_growth$train()
+  g = (self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred) - exp(1))$exp()
+  #print(g$var()$item())
+  return(g)
+}
+m1$growth_func = m1$.__enclos_env__$private$set_environment(gh)
+
+m_process = torch::torch_load("results/02_realdata/pft-period7-25patches_S0_T0_ba.trees.dbh.growth.mort.reg.pt")
+
+
+cv_S = "S0"
+cv_T = "T0"
+env_dt = fread(paste0(i_dir,"/env_dt_",cv_S,"_",cv_T,"_test.csv"))
+env_dt = env_dt[,.(siteID, year, Prec, SR_kW_m2, RH_prc, T_max, T_min, swp )]
+
+obs_dt = fread(paste0(i_dir,"/obs_dt_",cv_S,"_",cv_T,"_test.csv"))
+# only pick columns siteID species  year   dbh    ba trees growth  mort   reg r_mean_ha
+obs_dt = obs_dt[,.(siteID, species, year, dbh, ba, trees, growth, mort, reg)]
+
+cohorts_dt = fread(paste0(i_dir,"/initial_cohorts_",cv_S,"_",cv_T,"_test.csv"))
+# only pick columns siteID   dbh species patchID census trees cohortID
+cohorts_dt = cohorts_dt[,.(siteID, dbh, species, patchID, census, trees, cohortID)]
+
+obs_dt[dbh == 0, mort := NA_real_]
+obs_dt[dbh == 0, growth := NA_real_]
+obs_dt[dbh == 0, dbh := NA_real_]
+cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = Nspecies)
+
+m1 = torch::torch_load("results/02_realdata_hybridSmall/pft-period7-25patches_S0_T0.pt")
+gh = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
+  self$nn_growth$train()
+  g = (self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred) - exp(1))$exp()
+  #print(g$var()$item())
+  return(g)
+}
+m1$growth_func = m1$.__enclos_env__$private$set_environment(gh)
+
+
+pred = m1$simulate(env = env_dt, patches = 25L, init_cohort = cohort1)
+library(iml)
+
+imps_species = lapply(1:5, function(sp) {
+
+  predictor = iml::Predictor$new(model = m1, data = env_dt, predict.function = function(model, newdata) {
+    newdata = as.data.table(newdata)
+    p = m1$simulate(newdata, patches = 25L, init_cohort = cohort1)
+    return(p$wide$site[species == sp]$growth)
+  }, y = obs_dt[species == sp]$growth)
+  
+  ale = iml::FeatureEffect$new(predictor = predictor, feature = "swp", method = "ale")
+  importance = iml::FeatureImp$new(predictor = predictor, loss = "logLoss", features = colnames(env_dt)[-(1:2)], n.repetitions = 10L)
+  res = importance$results
+  res$species = sp
+  return(res)
+})
+
+par(mfrow = c(1,2))
+
+imps_species_df = do.call(rbind, imps_species)
+ggplot(imps_species_df, aes(x = as.factor(species), y = importance-1, fill = as.factor(feature))) + 
+  geom_bar(position=position_dodge(), stat="identity", colour='black') +
+  geom_errorbar(aes(ymin=importance.05-1, ymax=importance.95-1), width=.2,position=position_dodge(.9)) +
+  theme_bw() + ylab("Variable Importance")
+
+
+effs = (m_process$parameters_r$nn_growth.0.weight**2)[,-1]
+colnames(effs) = colnames(env_dt)[-(1:2)]
+rownames(effs) = 1:5
+effs = data.frame(melt(data.table(effs)))
+effs$species = rep(1:5, 6)
+ggplot(effs, aes(x = as.factor(species), y = value, fill = as.factor(variable))) + 
+  geom_bar(position=position_dodge(), stat="identity", colour='black') +
+  theme_bw() + ylab("Variable Importance")
+
+
+obs_dt[,.(min = min(dbh, na.rm = TRUE), max = max(dbh, na.rm = TRUE)), by = .(species)]
+obs_dt[,.(min = min(trees, na.rm = TRUE), max = max(trees, na.rm = TRUE)), by = .(species)]
+
+
+light_dbh = expand.grid(dbh = seq(1, 50, length.out = 100), light = seq(0.0, 1.0, length.out = 100), growth = NA)
+species = 1
+n_cohorts = 10
+n_trees = 1
+n_sites = 1000
+for(i in 1:nrow(light_dbh)) {
+  dbh_pred = 
+  (m1$nn_growth(dbh = torch_tensor(array(c(light_dbh$dbh[i], rep(20, n_cohorts-1)), dim = c(n_sites, 1, n_cohorts))),
+               trees =torch_tensor(array(n_trees, dim = c(n_sites, 1, n_cohorts))),
+               light = torch_tensor(array(c(light_dbh$light[i], rep(0.5, n_cohorts-1)), dim = c(n_sites, 1, n_cohorts))),
+               env = torch_tensor(array(c(1.0, (env_dt %>% colMeans())[-(1:2)]), dim = c(n_sites, 7))),
+               species = torch_tensor(array(species, dim = c(n_sites, 1, n_cohorts)), dtype=torch_long())
+               ) -exp(1))$exp() %>% as_array()
+  light_dbh[i, 3] = apply(dbh_pred, 2:3, mean) %>% mean()
+}
+p1 = 
+ggplot(light_dbh, aes(x = dbh, y = light, fill = growth)) +
+  geom_tile() +
+  scale_fill_viridis_c(
+    option = "viridis",   # or "magma", "plasma", "cividis", etc.
+    #limits = c(0, 7),
+    oob = scales::squish  # clamp values outside 0–100
+  )
+
+
+m_process$growth_func(dbh = torch_tensor(array(c(light_dbh$dbh[i], rep(20, n_cohorts-1)), dim = c(n_sites, 1, n_cohorts))),
+                      trees =torch_tensor(array(n_trees, dim = c(n_sites, 1, n_cohorts))),
+                      light = torch_tensor(array(c(light_dbh$light[i], rep(0.5, n_cohorts-1)), dim = c(n_sites, 1, n_cohorts))),
+                      pred = FINN:::index_species(m_process$nn_growth(torch_tensor(array(c(1.0, (env_dt %>% colMeans())[-(1:2)]), dim = c(n_sites, 7)) )), torch_tensor(array(species, dim = c(n_sites, 1, n_cohorts)), dtype=torch_long()) ),
+                      species = torch_tensor(array(species, dim = c(n_sites, 1, n_cohorts)), dtype=torch_long()), 
+                      parGrowth = m_process$par_growth ) %>% as_array()
+
+light_dbh_process = expand.grid(dbh = seq(1, 50, length.out = 100), light = seq(0.0, 1.0, length.out = 100), growth = NA)
+species = 2
+n_cohorts = 10
+n_trees = 1
+n_sites = 1000
+for(i in 1:nrow(light_dbh)) {
+  dbh_pred = 
+    m_process$growth_func(dbh = torch_tensor(array(cbind(light_dbh$dbh, matrix(rep(20, n_cohorts-1), nrow = length(light_dbh$dbh), ncol = n_cohorts-1)), 
+                                                   dim = c(n_sites, 1, n_cohorts))),
+                          trees =torch_tensor(array(n_trees, dim = c(n_sites, 1, n_cohorts))),
+                          light = torch_tensor(array(c(light_dbh$light[i], rep(0.5, n_cohorts-1)), dim = c(n_sites, 1, n_cohorts))),
+                          pred = FINN:::index_species(m_process$nn_growth(torch_tensor(array(c(1.0, (env_dt %>% colMeans())[-(1:2)]), dim = c(n_sites, 7)) )), torch_tensor(array(species, dim = c(n_sites, 1, n_cohorts)), dtype=torch_long()) ),
+                          species = torch_tensor(array(species, dim = c(n_sites, 1, n_cohorts)), dtype=torch_long()), 
+                          parGrowth = m_process$par_growth ) %>% as_array()
+  light_dbh_process[i, 3] = apply(dbh_pred, 2:3, mean) %>% mean()
+}
+
+p2 = 
+ggplot(light_dbh_process, aes(x = dbh, y = light, fill = growth)) +
+  geom_tile() +
+  scale_fill_viridis_c(
+    option = "viridis",   # or "magma", "plasma", "cividis", etc.
+    #limits = c(0, 7),
+    oob = scales::squish  # clamp values outside 0–100
+  )
+
+
+library(gridExtra)
+grid.arrange(p1, p2, nrow = 1L, ncol = 2L)
+
+
+elight_trees = expand.grid(trees = seq(1, 100, length.out = 20), light = seq(0.0, 1.0, length.out = 20), growth = NA)
+species = 4
+n_cohorts = 10
+n_trees = 4
+for(i in 1:nrow(light_trees)) {
+  dbh_pred = 
+    (m1$nn_growth(dbh = torch_tensor(array(8, dim = c(100, 1, n_cohorts))),
+                  trees =torch_tensor(array(light_trees$trees[i], dim = c(100, 1, n_cohorts))),
+                  light = torch_tensor(array(light_trees$light[i], dim = c(100, 1, n_cohorts))),
+                  env = torch_tensor(array(c(0.0, rep(0.0, 6)), dim = c(100, 7))),
+                  species = torch_tensor(array(species, dim = c(100, 1, n_cohorts)), dtype=torch_long())
+    ) -exp(1))$exp() %>% as_array()
+  light_trees[i, 3] = apply(dbh_pred, 2:3, mean) %>% mean()
+}
+ggplot(light_trees, aes(x = trees, y = light, fill = growth)) +
+  geom_tile() +
+  scale_fill_viridis(discrete=FALSE, direction=1)
+
+
+light_trees = expand.grid(trees = seq(1, 200, length.out = 20), light = seq(0.0, 1.0, length.out = 20), growth = NA)
+species = 4
+
+n_trees = 50
+for(i in 1:nrow(light_trees)) {
+  n_cohorts = light_trees$trees[i]
+  dbh_pred = 
+    (m1$nn_growth(dbh = torch_tensor(array(8, dim = c(100, 1, n_cohorts))),
+                  trees =torch_tensor(array(n_trees, dim = c(100, 1, n_cohorts))),
+                  light = torch_tensor(array(light_trees$light[i], dim = c(100, 1, n_cohorts))),
+                  env = torch_tensor(array(c(0.0, rep(0.0, 6)), dim = c(100, 7))),
+                  species = torch_tensor(array(species, dim = c(100, 1, n_cohorts)), dtype=torch_long())
+    ) -exp(1))$exp() %>% as_array()
+  light_trees[i, 3] = apply(dbh_pred, 2:3, mean) %>% mean()
+}
+ggplot(light_trees, aes(x = trees, y = light, fill = growth)) +
+  geom_tile() +
+  scale_fill_viridis(discrete=FALSE, direction=1)
+
+
 pred_dt <- pred$wide$site
 pred_dt$pred <- "pred"
 
@@ -354,7 +529,8 @@ comp_allspecies_dt[,.(ba = cor(ba.obs, ba.pred, use = "complete.obs", method = "
                       trees = cor(trees.obs, trees.pred, use = "complete.obs", method = "spearman"),
                       growth = cor(growth.obs, growth.pred, use = "complete.obs", method = "spearman"),
                       mort = cor(mort.obs, mort.pred, use = "complete.obs", method = "spearman"),
-                      reg = cor(reg.obs, reg.pred, use = "complete.obs", method = "spearman"))] %>% colMeans()
+                      reg = cor(reg.obs, reg.pred, use = "complete.obs", method = "spearman")), by = .(species)] %>% colMeans()
 
 
 hist(obs_dt$growth)
+
