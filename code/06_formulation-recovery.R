@@ -3,6 +3,7 @@ library(ggplot2)
 library(data.table)
 library(gridExtra)
 library(grid)
+library(torch)
 library(data.table)
 
 # Function to extract the legend as a grob
@@ -26,8 +27,56 @@ label_grob_f = function(x){
   textGrob(x, x = unit(0.05, "npc"), y = unit(0.95, "npc"), just = c("left", "top"), gp = gpar(fontsize = 16, fontface = "bold"))
 }
 
+# Define different growth models with different structure
+
+parGrowth = cbind(
+  c(0.5),# growthLight
+  c(0.06)# growthSize
+)
+
+source("code/99_cohort500fix2.R")
+
+growth_m1 <- function (dbh, species, parGrowth, pred, light, light_steepness = 50, 
+                       debug = F, trees = NULL) {
+  shade = ((1/(1 + torch::torch_exp(-light_steepness * (light - 
+                                                          parGrowth[, 1][species]))) - 1/(1 + torch::torch_exp(light_steepness * 
+                                                                                                                 parGrowth[, 1][species])))/(1/(1 + torch::torch_exp(-light_steepness * 
+                                                                                                                                                                       (1 - parGrowth[, 1][species]))) - 1/(1 + torch::torch_exp(light_steepness * 
+                                                                                                                                                                                                                                   parGrowth[, 1][species]))))
+  environment = torch::torch_exp(pred)
+  growth = shade * environment * (torch::torch_exp(-parGrowth[, 
+                                                              2][species] * dbh))
+  if (debug == TRUE) 
+    out = list(shade = shade, light = light, environment = environment, 
+               growth = growth)
+  else out = growth
+  return(out)
+}
+
+growth_m2 <- function (dbh, species, parGrowth, pred, light, light_steepness = 10, 
+                       debug = F, trees = NULL) {
+  shade = parGrowth[, 1][species]*light
+  environment = torch::torch_exp(pred)
+  growth = shade * environment * (torch::torch_exp(-parGrowth[, 
+                                                              2][species] * dbh))
+  if (debug == TRUE) 
+    out = list(shade = shade, light = light, environment = environment, 
+               growth = growth)
+  else out = growth
+  return(out)
+}
+
+gf_m1 = function(l, dbh = 10, pred = 0) as_array(growth_m1(dbh = dbh, species = 1, parGrowth = torch_tensor(parGrowth), light = l, pred = pred))
+gf_m2 = function(l, dbh = 10, pred = 0) as_array(growth_m2(dbh = dbh, species = 1, parGrowth = torch_tensor(parGrowth), light = l, pred = pred))
+
+x_dbh <- seq(0,1,.01)
+plot(x_dbh,(sapply(x_dbh,gf_m1)), type = "l", xlab = "light", ylab = "growth")
+lines(x_dbh,(sapply(x_dbh,gf_m2)), type = "l", col = "red")
+
+
+
 Ntimesteps = 100  # number of timesteps
-Nsites = 1 # number of sites
+Nsites = 20 # number of sites
 patch_size = 0.1
 Nsp = 1 # number of species
 sp_id = 1
@@ -42,11 +91,11 @@ parRegEnv = list(matrix(c(
   0
 ),Nsp, 2))
 
-# growth parameters
-parGrowth = matrix(c(
-  shadeSP, # see above
-  0.06 # the second growth parameter modulates the size dependent growth
-),Nsp, 2) 
+# # growth parameters
+# parGrowth = matrix(c(
+#   shadeSP, # see above
+#   0.06 # the second growth parameter modulates the size dependent growth
+# ),Nsp, 2) 
 
 parGrowthEnv = list(matrix(c(
   1, # intercept regulating the overall effect size
@@ -111,31 +160,31 @@ env_dt <- data.table(
 dist_dt <- env_dt
 
 # for this very simple model we will have a constant environment for all sites and timesteps
-env_dt$env1 = rep(0, Ntimesteps)
+env_dt$env1 = rep(0, Ntimesteps*Nsites)
 disturbance_frequency = 0.0
 disturbance_intensity = rbinom(Ntimesteps*Nsites,1,0.2)*runif(Ntimesteps*Nsites, 0.5, 1)
 dist_dt$intensity = rbinom(Ntimesteps*Nsites, 1, disturbance_frequency)*disturbance_intensity
 
 predictions <- list()
-simulationModel = finn(N_species = Nsp, 
+m1_1patch = finn(N_species = Nsp, 
                        competition_process = createProcess(~0, func = FINN::competition),
-                       growth_process = createProcess(~1+env1, initEnv = parGrowthEnv,initSpecies = parGrowth, func = FINN::growth),
+                       growth_process = createProcess(~1+env1, initEnv = parGrowthEnv,initSpecies = parGrowth, func = growth_m1),
                        regeneration_process = createProcess(~1+env1, initEnv = parRegEnv,initSpecies = parReg, func = FINN::regeneration),
                        mortality_process = createProcess(~1+env1, initEnv = parMortEnv,initSpecies = parMort, func = FINN::mortality),
 )
 
 predictions[["patches_1"]] = 
-  simulationModel$simulate(init_cohort = NULL, env = env_dt, disturbance= dist_dt, device = "cpu", patches = 1)
+  m1_1patch$simulate(init_cohort = NULL, env = env_dt, disturbance= dist_dt, device = "cpu", patches = 1)
 
-simulationModel = finn(N_species = Nsp, 
+m1 = finn(N_species = Nsp, 
                        competition_process = createProcess(~0, func = FINN::competition),
-                       growth_process = createProcess(~1+env1, initEnv = parGrowthEnv,initSpecies = parGrowth, func = FINN::growth),
+                       growth_process = createProcess(~1+env1, initEnv = parGrowthEnv,initSpecies = parGrowth, func = growth_m1),
                        regeneration_process = createProcess(~1+env1, initEnv = parRegEnv,initSpecies = parReg, func = FINN::regeneration),
                        mortality_process = createProcess(~1+env1, initEnv = parMortEnv,initSpecies = parMort, func = FINN::mortality)
 )
 
 predictions[["patches_100"]] = 
-  simulationModel$simulate(init_cohort = NULL, env = env_dt, disturbance = dist_dt, device = "cpu", patches = 20, debug = T)
+  m1$simulate(init_cohort = NULL, env = env_dt, disturbance = dist_dt, device = "cpu", patches = 10, debug = T)
 
 p_list <- list()
 for(i in c("patches_1", "patches_100")){
@@ -182,20 +231,122 @@ grid.arrange(
 obs_dt <- predictions[["patches_100"]]$wide$site
 cohorts_dt <- predictions[["patches_100"]]$wide$cohort
 
-obs_dt <- obs_dt[year >= 80]
-env_dt_calib <- env_dt[year >= 80]
-init_cohort <- FINN::CohortMat$new(cohorts_dt[year == 79,], sp = 1)
+obs_dt <- obs_dt[year >= 25 & year <= 75]
+env_dt_calib <- env_dt[year >= 25 & year <= 75]
+init_cohort <- FINN::CohortMat$new(cohorts_dt[year == 24,], sp = 1)
+
+obs_dt[dbh == 0, mort := NA_real_]
+obs_dt[dbh == 0, growth := NA_real_]
+obs_dt[dbh == 0, dbh := NA_real_]
+obs_dt[,reg := reg/0.1,]
 
 
-simulationModel2 = finn(N_species = Nsp, 
+m2 = finn(N_species = Nsp, 
                         competition_process = createProcess(~0, func = FINN::competition, optimizeSpecies = F, optimizeEnv = F),
-                        growth_process = createProcess(~1+env1, initEnv = NULL,initSpecies = NULL, func = FINN::growth),
+                        growth_process = createProcess(~1+env1, initEnv = NULL,initSpecies = NULL, func = growth_m2, optimizeSpecies = T, optimizeEnv = T),
                         regeneration_process = createProcess(~1+env1, initEnv = parRegEnv,initSpecies = parReg, func = FINN::regeneration, optimizeSpecies = F, optimizeEnv = F),
                         mortality_process = createProcess(~1+env1, initEnv = parMortEnv,initSpecies = parMort, func = FINN::mortality, optimizeSpecies = F, optimizeEnv = F),
 )
+# -1 oder 0 + 
 
-simulationModel2$fit(data = obs_dt, batchsize = 1, env = env_dt_calib, init_cohort = init_cohort,  epochs = 500, patches = 100, lr = 0.01,
-                     optimizer = torch::optim_adam, device = "cpu", plot_progress = T,
-                     loss= c(dbh = "mse", ba = "mse", trees = "nbinom", growth = "mse", mortality = "mse", regeneration = "nbinom")
+growth_m3 = createHybrid(~., transformer = FALSE, dropout = 0.2)
+
+m3 = finn(
+  N_species = Nsp,
+  competition_process = createProcess(~0, func = FINN::competition, optimizeSpecies = F, optimizeEnv = F),
+  growth_process = growth_m3,
+  regeneration_process = createProcess(~1+env1, initEnv = parRegEnv,initSpecies = parReg, func = FINN::regeneration, optimizeSpecies = F, optimizeEnv = F),
+  mortality_process = createProcess(~1+env1, initEnv = parMortEnv,initSpecies = parMort, func = FINN::mortality, optimizeSpecies = F, optimizeEnv = F),
 )
+
+gh = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
+  g = (self$nn_growth(dbh = dbh, light = light, species = species, env = pred) - exp(1))$exp()
+  return(g)
+}
+
+m3$growth_func = m3$.__enclos_env__$private$set_environment(gh)
+source("code/99_cohort500fix2.R")
+m3$fit(data = obs_dt, batchsize = 10, env = env_dt_calib, init_cohort = init_cohort,  epochs = 500, patches = 1, lr = 0.001,
+                     optimizer = torch::optim_adam, device = "cpu", plot_progress = T,
+                     weights = c(0.1, 10, 1.0, 10.0, 1, 1),
+                     loss= c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom")
+)
+
+# m3$growth_func(dbh = torch_tensor(array(10, dim = c(1, 1, 1))), 
+#                species = torch_tensor(array(1, dim = c(1, 1, 1)), dtype=torch_long()), parGrowth = torch_tensor(parGrowth), 
+#                light = torch_tensor(array(0.5, dim = c(1, 1, 1))), 
+#                pred = torch_tensor(array(c(1, 1), dim = c(1, 2))))$squeeze() %>% as.matrix()
+# 
+# m3$growth_func
+m3$eval()
+gf_m3 = function(l, dbh = 10, pred = 0) {
+  m3$growth_func(dbh = torch_tensor(array(dbh, dim = c(1, 1, 1))), 
+                 species = torch_tensor(array(1, dim = c(1, 1, 1)), dtype=torch_long()), parGrowth = torch_tensor(parGrowth), 
+                 light = torch_tensor(array(l, dim = c(1, 1, 1))), 
+                 pred = torch_tensor(array(c(1, pred), dim = c(1, 2))))$squeeze() %>% as.matrix() 
+  
+}
+  
+x_dbh <- seq(0,1,.01)
+plot(x_dbh,(sapply(x_dbh,gf_m1)), type = "l", xlab = "light", ylab = "growth", ylim = c(0, 10))
+lines(x_dbh,(sapply(x_dbh,gf_m2)), type = "l", col = "red")
+lines(x_dbh,(sapply(x_dbh,gf_m3)), type = "l", col = "green")
+legend("topright", legend = c("m1", "m2", "m3"), col = c("black", "red", "green"), lty = 1, lwd = 2)
+
+
+
+m2$fit(data = obs_dt, batchsize = 1, env = env_dt_calib, init_cohort = init_cohort,  epochs = 500, patches = 100, lr = 0.01,
+                     optimizer = torch::optim_adam, device = "cpu", plot_progress = T, weights = c(0.1, 10, 1.0, 10.0, 1, 1),
+                     loss= c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom")
+)
+
+simulationModel2$par_growth_r
+parGrowth
+
+
+
+parGrowth = cbind(
+  c(0.5),# growthLight
+  c(0.01)# growthSize
+)
+
+growth_m1 <- function (dbh, species, parGrowth, pred, light, light_steepness = 50, 
+                       debug = F, trees = NULL) {
+  shade = ((1/(1 + torch::torch_exp(-light_steepness * (light - 
+                                                          parGrowth[, 1][species]))) - 1/(1 + torch::torch_exp(light_steepness * 
+                                                                                                                 parGrowth[, 1][species])))/(1/(1 + torch::torch_exp(-light_steepness * 
+                                                                                                                                                                       (1 - parGrowth[, 1][species]))) - 1/(1 + torch::torch_exp(light_steepness * 
+                                                                                                                                                                                                                                   parGrowth[, 1][species]))))
+  environment = torch::torch_exp(pred)
+  growth = shade * environment * (torch::torch_exp(-parGrowth[, 
+                                                              2][species] * dbh))
+  if (debug == TRUE) 
+    out = list(shade = shade, light = light, environment = environment, 
+               growth = growth)
+  else out = growth
+  return(out)
+}
+
+growth_m2 <- function (dbh, species, parGrowth, pred, light, light_steepness = 10, 
+                       debug = F, trees = NULL) {
+  shade = parGrowth[, 1][species]*light
+  environment = torch::torch_exp(pred)
+  growth = shade * environment * (torch::torch_exp(-parGrowth[, 
+                                                              2][species] * dbh))
+  if (debug == TRUE) 
+    out = list(shade = shade, light = light, environment = environment, 
+               growth = growth)
+  else out = growth
+  return(out)
+}
+
+gf_m1 = function(l, dbh = 10, pred = 0) as_array(growth_m1(dbh = dbh, species = 1, parGrowth = torch_tensor(parGrowth), light = l, pred = pred))
+gf_m2 = function(l, dbh = 10, pred = 0) as_array(growth_m2(dbh = dbh, species = 1, parGrowth = torch_tensor(parGrowth), light = l, pred = pred))
+
+x_dbh <- seq(0,1,.01)
+plot(x_dbh,(sapply(x_dbh,gf_m1)), type = "l", xlab = "light", ylab = "growth")
+lines(x_dbh,(sapply(x_dbh,gf_m2)), type = "l", col = "red")
+
+
+
 
