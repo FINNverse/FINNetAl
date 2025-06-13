@@ -131,11 +131,11 @@ simulationModel = finn(N_species = Nsp,
                        competition_process = createProcess(~0, func = FINN::competition),
                        growth_process = createProcess(~1+env1, initEnv = parGrowthEnv,initSpecies = parGrowth, func = FINN::growth),
                        regeneration_process = createProcess(~1+env1, initEnv = parRegEnv,initSpecies = parReg, func = FINN::regeneration),
-                       mortality_process = createProcess(~1+env1, initEnv = parMortEnv,initSpecies = parMort, func = FINN::mortality),
+                       mortality_process = createProcess(~1+env1, initEnv = parMortEnv,initSpecies = parMort, func = FINN::mortality)
 )
 
 predictions[["patches_100"]] = 
-  simulationModel$simulate(init_cohort = NULL, env = env_dt, disturbance = dist_dt, device = "cpu", patches = 20)
+  simulationModel$simulate(init_cohort = NULL, env = env_dt, disturbance = dist_dt, device = "cpu", patches = 20, debug = T)
 
 p_list <- list()
 for(i in c("patches_1", "patches_100")){
@@ -180,15 +180,21 @@ grid.arrange(
 
 
 obs_dt <- predictions[["patches_100"]]$wide$site
+cohorts_dt <- predictions[["patches_100"]]$wide$cohort
+
+obs_dt <- obs_dt[year >= 80]
+env_dt_calib <- env_dt[year >= 80]
+init_cohort <- FINN::CohortMat$new(cohorts_dt[year == 79,], sp = 1)
+
 
 simulationModel2 = finn(N_species = Nsp, 
-                        competition_process = createProcess(~0, func = FINN::competition),
+                        competition_process = createProcess(~0, func = FINN::competition, optimizeSpecies = F, optimizeEnv = F),
                         growth_process = createProcess(~1+env1, initEnv = NULL,initSpecies = NULL, func = FINN::growth),
-                        regeneration_process = createProcess(~1+env1, initEnv = parRegEnv,initSpecies = parReg, func = FINN::regeneration),
-                        mortality_process = createProcess(~1+env1, initEnv = parMortEnv,initSpecies = parMort, func = FINN::mortality),
+                        regeneration_process = createProcess(~1+env1, initEnv = parRegEnv,initSpecies = parReg, func = FINN::regeneration, optimizeSpecies = F, optimizeEnv = F),
+                        mortality_process = createProcess(~1+env1, initEnv = parMortEnv,initSpecies = parMort, func = FINN::mortality, optimizeSpecies = F, optimizeEnv = F),
 )
 
-simulationModel2$fit(data = obs_dt, batchsize = 1, env = env_dt, init_cohort = NULL,  epochs = 500, patches = 100, lr = 0.01,
+simulationModel2$fit(data = obs_dt, batchsize = 1, env = env_dt_calib, init_cohort = init_cohort,  epochs = 500, patches = 100, lr = 0.01,
                      optimizer = torch::optim_adam, device = "cpu", plot_progress = T,
                      loss= c(dbh = "mse", ba = "mse", trees = "nbinom", growth = "mse", mortality = "mse", regeneration = "nbinom")
 )
