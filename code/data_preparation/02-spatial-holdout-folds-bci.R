@@ -4,6 +4,7 @@ library(sf)
 library(gstat)
 library(ggplot2)
 
+
 for(i_patches in c("1patch", "25patches")){
   for(i_species in c("pft","genus")){
     for(i_period in c("period7", "period35")){
@@ -67,6 +68,16 @@ for(i_patches in c("1patch", "25patches")){
         xlab("X")+
         ylab("Y")+
         coord_fixed()
+      
+      p_spatial2 = ggplot(swp_dt, aes(x = x_class, y = y_class, fill = factor(spatial_fold))) +
+        geom_tile()+
+        theme_minimal() +
+        labs(title = "Spatial Folds", color = "Fold")+
+        # facet_wrap(~factor(fold)) +
+        # theme(legend.position = "none")+
+        xlab("X")+
+        ylab("Y")+
+        coord_fixed()
 
       obs_dt2 <- merge(obs_dt, swp_dt[,.(siteID, spatial_holdout)], by = "siteID")
       Nobs_dt1 <-
@@ -83,6 +94,16 @@ for(i_patches in c("1patch", "25patches")){
       ggsave(
         filename = paste0(out_dir,"/spatial_block.tiff"), # File name
         plot = p_spatial,                         # ggplot object
+        device = "tiff",                  # File format
+        compression = "lzw",              # Compression type
+        dpi = 300,                        # Resolution
+        width = 8,                        # Width in inches
+        height = 3                        # Height in inches
+      )
+      # Save as compressed TIFF
+      ggsave(
+        filename = paste0(out_dir,"/spatial_block2.tiff"), # File name
+        plot = p_spatial2,                         # ggplot object
         device = "tiff",                  # File format
         compression = "lzw",              # Compression type
         dpi = 300,                        # Resolution
