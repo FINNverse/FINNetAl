@@ -254,12 +254,24 @@ growth_m1env = createProcess(~1+env1, initEnv = parGrowthEnv_m1env,initSpecies =
 reg_m1env = createProcess(~1, initEnv = list(matrix(parRegEnv[[1]][,1])),initSpecies = parReg, func = FINN::regeneration, sample_regeneration = F, optimizeSpecies = FALSE, optimizeEnv = FALSE)
 mort_m1env = createProcess(~1+env1, initEnv = parMortEnv,initSpecies = parMort, func = FINN::mortality, optimizeSpecies = FALSE, optimizeEnv = FALSE)
 
-m1env = finn(N_species = Nsp, 
-             competition_process = comp_m1env,
-             growth_process = growth_m1env,
-             regeneration_process = reg_m1env,
-             mortality_process = mort_m1env
-)
+if(!dir.exists("results/06_formrecov")){
+  dir.create("results/06_formrecov", recursive = T)
+}
+
+if(file.exists("results/06_formrecov/C_m1env.pt")){
+  m1env = torch::torch_load("results/06_formrecov/C_m1env.pt")
+  }else{
+    m1env = finn(N_species = Nsp, 
+                 competition_process = comp_m1env,
+                 growth_process = growth_m1env,
+                 regeneration_process = reg_m1env,
+                 mortality_process = mort_m1env
+    )
+  torch::torch_save(m1env,"results/06_formrecov/C_m1env.pt")
+  }
+
+# -1 oder 0 + 
+
 
 ###  M2 (wrong process model) ####
 
@@ -396,26 +408,28 @@ ggplot(obs_dt_p, aes(x = env1, y = growth*dbh)) +
   labs(x = "env1", y = "growth") +
   theme_classic()
 
-# -1 oder 0 + 
-dir.create("results/06_formrecov", recursive = T)
-torch::torch_save(m1env,"results/06_formrecov/C_m1env.pt")
 
-m3env$fit(data = obs_dt, batchsize = 20, env = env_dt_calib, init_cohort = init_cohort,  epochs = 500, patches = Npatches, lr = 0.001,
-          optimizer = torch::optim_adam, device = "cpu", plot_progress = T,
-          weights = c(0.1, 10, 1.0, 10.0, 1, 1),
-          loss= c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom")
-)
+if(file.exists("results/06_formrecov/A_m3env1000.pt")){
+  m3env = torch::torch_load("results/06_formrecov/A_m3env1000.pt")
+}else{
+  m3env$fit(data = obs_dt, batchsize = 20, env = env_dt_calib, init_cohort = init_cohort,  epochs = 500, patches = Npatches, lr = 0.001,
+            optimizer = torch::optim_adam, device = "cpu", plot_progress = T,
+            weights = c(0.1, 10, 1.0, 10.0, 1, 1),
+            loss= c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom")
+  )
+  torch::torch_save(m3env,"results/06_formrecov/C_m3env1000.pt")
+}
 
-torch::torch_save(m3env,"results/06_formrecov/C_m3env1000.pt")
-
-m2env$fit(data = obs_dt, batchsize = 5, env = env_dt_calib, init_cohort = init_cohort,  epochs = 500, patches = Npatches, lr = 0.001,
-          optimizer = torch::optim_adam, device = "cpu", plot_progress = T,
-          weights = c(0.1, 10, 1.0, 10.0, 1, 1),
-          loss= c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom")
-)
-
-torch::torch_save(m2env,"results/06_formrecov/C_m2env1000.pt")
-
+if(file.exists("results/06_formrecov/C_m2env1000.pt")){
+  m1env = torch::torch_load("results/06_formrecov/C_m2env1000.pt")
+  }else{
+    m2env$fit(data = obs_dt, batchsize = 5, env = env_dt_calib, init_cohort = init_cohort,  epochs = 500, patches = Npatches, lr = 0.001,
+              optimizer = torch::optim_adam, device = "cpu", plot_progress = T,
+              weights = c(0.1, 10, 1.0, 10.0, 1, 1),
+              loss= c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom")
+    )
+    torch::torch_save(m2env,"results/06_formrecov/C_m2env1000.pt")
+  }
 ## plot simulations from calibrated models ####
 
 pred_m1env <- m1env$simulate(init_cohort = init_cohort, env = env_dt_calib, disturbance = dist_dt, device = "cpu", patches = Npatches, debug = T)
