@@ -565,21 +565,70 @@ lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#
 legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
 dev.off()
 
-# m3env$fit(data = obs_dt, batchsize = 5, env = env_dt_calib, init_cohort = init_cohort,  epochs = 8000, patches = Npatches, lr = 0.001,
-#           optimizer = torch::optim_adam, device = "cpu", plot_progress = T,
-#           weights = c(0.1, 10, 1.0, 10.0, 1, 1),
-#           loss= c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom")
-# )
-# torch::torch_save(m3env,"results/06_formrecov/C_m3env1000.pt")
-# 
-# m2env$fit(data = obs_dt, batchsize = 10, env = env_dt_calib, init_cohort = init_cohort,  epochs = 8000, patches = Npatches, lr = 0.001,
-#           optimizer = torch::optim_adam, device = "cpu", plot_progress = T,
-#           weights = c(0.1, 10, 1.0, 10.0, 1, 1),
-#           loss= c(dbh = "mse", ba = "mse", trees = "poisson", growth = "mse", mortality = "mse", regeneration = "nbinom")
-# )
-# torch::torch_save(m2env,"results/06_formrecov/C_m2env1000.pt")
+
+
+pred_m1env2 <- m1env$simulate(init_cohort = NULL, env = env_dt_nodebug, disturbance = dist_dt_nodebug, device = "cpu", patches = Npatches, debug = F)
+pred_m2env2 <- m2env$simulate(init_cohort = NULL, env = env_dt_nodebug, disturbance = dist_dt_nodebug, device = "cpu", patches = Npatches, debug = F)
+pred_m3env2 <- m3env$simulate(init_cohort = NULL, env = env_dt_nodebug, disturbance = dist_dt_nodebug, device = "cpu", patches = Npatches, debug = F)
+
+pred_m1_site_dt <- pred_m1env2$long$site
+pred_m2_site_dt <- pred_m2env2$long$site
+pred_m3_site_dt <- pred_m3env2$long$site
+
+comp_dt2 <- merge(pred_m1_site_dt, pred_m2_site_dt, by = c("year", "siteID","species", "variable"), suffixes = c("_obs", "_pred"))
+comp_dt2 <- merge(comp_dt2, env_dt, by = c("year", "siteID"))
+
+cor_dt2 <- comp_dt2[!is.na(value_obs) & !is.na(value_pred),.(
+  r = cor(value_obs, value_pred, method = "spearman"),
+  diff = mean(value_obs - value_pred, na.rm = TRUE)
+), by = c("siteID","variable")]
+
+
+comp_dt3 <- merge(pred_m1_site_dt, pred_m3_site_dt, by = c("year", "siteID","species","variable"), suffixes = c("_obs", "_pred"))
+comp_dt3 <- merge(comp_dt3, env_dt, by = c("year", "siteID"))
+
+cor_dt3 <- comp_dt3[!is.na(value_obs) & !is.na(value_pred),.(
+  r = cor(value_obs, value_pred, method = "spearman"),
+  diff = mean(value_obs - value_pred, na.rm = TRUE)
+), by = c("siteID","variable")]
+
+cor_dt <- rbind(
+  data.table(cor_dt2, model = "M2 (wrong process model)"),
+  data.table(cor_dt3, model = "M3 (hybrid model)")
+)
+
+var_labels3 = c("Basal Area\n[m²/ha]",
+                "Trees\n[N/ha]",
+                "DBH\n[cm]",
+                "Regeneration\n[N/ha]",
+                "Growth\n[%/100]",
+                "Mortality\n[%/100]")
+cor_dt[, variable2 := factor(variable, levels = c("ba","trees","dbh","r_mean_ha","growth", "mort"), labels = var_labels3),]
+
+pdf("figures/Cform-recovery-cors.pdf", width = 6, height = 6)
+ggplot(cor_dt[variable != "reg"], aes(x = variable2, y = r, color = model))+
+  geom_hline(yintercept = c(0,1), color = "grey50") +
+  geom_boxplot()+
+  labs(y = "Spearmans R") +
+  ggthemes::theme_base()+
+  scale_y_continuous(breaks = seq(-1,1,0.2))+
+  scale_color_manual(values = c("#fe944e","#6c9fca"))+  # theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+  scale_fill_manual(values = c("#fe944e","#6c9fca"))+  # theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+  theme(
+    legend.title = element_blank(),
+    plot.title       = element_text(hjust = 0.5, face = "bold"),axis.title.x = element_blank(),
+    # put legend *inside* the plotting area:
+    legend.position  = c(0.3, 0.4),   # (x, y) in NPC units
+    legend.direction = "vertical",
+    legend.background = element_rect(
+      fill   = alpha("white", 0.6),     # translucent white background
+      colour = NA
+    ),
+    # remove box around plot
+    panel.border = element_blank()
+  )
+dev.off()
 
 
 
-# Recover complex environmental effect ####
-## Recover complex environmental effect ####
+

@@ -294,6 +294,20 @@ grid.arrange(
 #| warning: false
 #| fig-cap: "Parameter recovery from 1000 replicate simulations and refits of the full model using five‑fold spatial cross‑validation. Blue half‑violin/half‑box plots show the distribution of estimation errors (posterior mean of the fitted parameter minus its true value). a) Process‑level parameters: errors grouped by ecological process (competition, growth, mortality, regeneration) and shown for the corresponding process parameters (e.g., compHeight, growthLight, mortSize). b) Environmental parameter estimates: errors for the weights associated with the intercept and six climatic covariates (Prec, SR_kW_m2, RH_prc, T_max, T_min, swp) within each process. Because the neural‑network component consists of a single linear layer, these weights are equivalent to classical multivariate linear‑regression coefficients. The red horizontal line indicates perfect recovery (error = 0)."
 
+obs_dt <- fread("data/BCI/noSplits/pft-period7-25patches/obs_dt.csv")
+
+obs_dt[,species2 := factor(species,levels = 1:5, labels = names(pft_cols)),]
+
+avg_obs_dt <- obs_dt[,.(
+  ba = mean(ba)/0.1,
+  trees = mean(trees)/0.1,
+  dbh = mean(dbh, na.rm = T),
+  growth = mean(growth, na.rm = T),
+  mort = mean(mort, na.rm = T),
+  r_mean_ha = mean(reg, na.rm = T)
+), by = species2]
+avg_obs_dt2 <- melt(avg_obs_dt, id.vars = "species2", variable.name = "variable", value.name = "value")
+
 ## Simulate equilibrium from fitted models
 # load fitted BCI models
 hybrid_m = torch::torch_load(fitted_models[grepl("hybrid",fitted_models)])
@@ -315,7 +329,7 @@ env_dt = fread(paste0("data/BCI/noSplits/", i_name,"/env_dt.csv"))
 # create artificial time series
 env_dt_long <- data.table()
 start_t = 0
-for(k in 1:20){
+for(k in 1:40){
   env_dt_temp = copy(env_dt)
   # randomly shuffle years in env_dt
   env_dt_temp$year = env_dt_temp$year+start_t
@@ -361,8 +375,15 @@ for(i in c("pred_hybrid","pred_process")){
   p_dat[,species2 := factor(species, levels = 1:5, labels = names(pft_cols)),]
   p_dat[, variable2 := factor(
   variable,
-  levels = c("dbh", "ba", "trees", "AL", "growth", "mort", "r_mean_ha"),
-  labels =  c("avg. DBH [cm]", "Basal Area [m²/ha]", "Trees [N/ha]", 
+  levels = c("ba", "trees", "dbh", "AL", "growth", "mort", "r_mean_ha"),
+  labels =  c("Basal Area [m²/ha]", "Trees [N/ha]", "avg. DBH [cm]",
+              "Available Light [%]", "Growth [%/100]", "Mortality [%/100]", 
+              "Reg. Mean [N/ha]")
+  ),]
+  avg_obs_dt2[, variable2 := factor(
+  variable,
+  levels = c("ba", "trees", "dbh",  "AL", "growth", "mort", "r_mean_ha"),
+  labels =  c("Basal Area [m²/ha]", "Trees [N/ha]", "avg. DBH [cm]",
               "Available Light [%]", "Growth [%/100]", "Mortality [%/100]", 
               "Reg. Mean [N/ha]")
   ),]
@@ -405,6 +426,18 @@ grid.arrange(
 )
 print(p_list[[1]])
 print(p_list[[2]])
+
+grid.arrange(
+  grobs = c(
+    list(label_grob_f("a"), label_grob_f("b")),
+    list(p_list[[1]]+theme(legend.position = "none")+geom_hline(data = avg_obs_dt2,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5), 
+         p_list[[2]]+theme(legend.position = "none")+geom_hline(data = avg_obs_dt2,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5)), list(legend_p)),
+  ncol = 2,
+  layout_matrix = rbind(c(1, 2), c(3, 4), c(5,5)),
+  heights = c(0.05, 0.90,0.2)
+)
+print(p_list[[1]]+geom_hline(data = avg_obs_dt2,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5))
+print(p_list[[2]]+geom_hline(data = avg_obs_dt2,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5))
 
 
 
@@ -811,7 +844,7 @@ for(i_hybrid_model in fitted_models_fig4[grepl("hybrid",fitted_models_fig4)]){
   ggplot(all_cors, aes(x = type2, y = spearmans_r, color = species2))+
     geom_hline(yintercept = c(-1,0,1), linetype = "solid", color = "grey50", linewidth = 1)+
     geom_boxplot(position = position_dodge())+
-    labs(x = "", y = "Spearmans R")+
+    labs(x = "", y = "Spearmans Correlation")+
     theme_classic()+
     facet_wrap(~variable, ncol = 1)+
     coord_cartesian(ylim = c(-1,1))+
@@ -878,7 +911,7 @@ p2_full =
   ggplot(all_cors, aes(x = type2, y = spearmans_r, color = species2))+
     geom_hline(yintercept = c(-1,0,1), linetype = "solid", color = "grey50", linewidth = 1)+
     geom_boxplot(position = position_dodge())+
-    labs(x = "", y = "Spearmans R")+
+    labs(x = "", y = "Spearmans Correlation")+
     theme_classic()+
     facet_wrap(~variable2, ncol = 3)+
     coord_cartesian(ylim = c(-1,1))+
@@ -938,7 +971,7 @@ p2_full =
   ggplot(all_cors2, aes(x = type2, y = spearmans_r, color = species2))+
     geom_hline(yintercept = c(-1,0,1), linetype = "solid", color = "grey50", linewidth = 1)+
     geom_boxplot(position = position_dodge())+
-    labs(x = "", y = "Spearmans R")+
+    labs(x = "", y = "Spearmans Correlation")+
     theme_classic()+
     facet_wrap(~variable2, ncol = 3)+
     coord_cartesian(ylim = c(-1,1))+
@@ -1180,7 +1213,7 @@ for(i_hybrid_model in fitted_models_mort_fig4[grepl("hybrid",fitted_models_mort_
   ggplot(all_cors, aes(x = type2, y = spearmans_r, color = species))+
     geom_hline(yintercept = c(-1,0,1), linetype = "solid", color = "grey50", linewidth = 1)+
     geom_boxplot(position = position_dodge())+
-    labs(x = "", y = "Spearmans R")+
+    labs(x = "", y = "Spearmans Correlation")+
     theme_classic()+
     facet_wrap(~variable, ncol = 1)+
     coord_cartesian(ylim = c(-1,1))+
@@ -1608,7 +1641,7 @@ p_cors2 <- p_cors[cv != "T0S0",.(
 ggplot(p_cors2[grepl("pft", scale) & simreal == "simulated"],aes(x = variable, y = forcats::fct_reorder(response, -nresponses), fill = r)) +
   geom_tile() +
   scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, limits = c(-1,1)) +
-  labs(x = "Predicted Variable", y = "Loss Variables", fill = "Spearmans R") +
+  labs(x = "Predicted Variable", y = "Loss Variables", fill = "Spearmans Correlation") +
   theme_classic() +
   facet_grid(test_train~scale, )+
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
@@ -1640,7 +1673,7 @@ p_cors2 <- p_cors[cv != "S0T0",.(
 p_pft <- ggplot(p_cors2[grepl("pft", scale) & simreal == "real"],aes(x = variable, y = hybrid, fill = r)) +
   geom_tile() +
   scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, limits = c(-1,1)) +
-  labs(x = "Predicted Variable", y = "Loss Variables", fill = "Spearmans R") +
+  labs(x = "Predicted Variable", y = "Loss Variables", fill = "Spearmans Correlation") +
   theme_classic() +
   facet_grid(test_train~scale)+
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
@@ -1648,7 +1681,7 @@ p_pft <- ggplot(p_cors2[grepl("pft", scale) & simreal == "real"],aes(x = variabl
 p_genus <- ggplot(p_cors2[grepl("genus", scale) & simreal == "real"],aes(x = variable, y = hybrid, fill = r)) +
   geom_tile() +
   scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, limits = c(-1,1)) +
-  labs(x = "Predicted Variable", y = "Loss Variables", fill = "Spearmans R") +
+  labs(x = "Predicted Variable", y = "Loss Variables", fill = "Spearmans Correlation") +
   theme_classic() +
   facet_grid(test_train~scale)+
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
@@ -1741,12 +1774,15 @@ p_dat <- melt(par_df, id.vars = c("name", "process", "species", "type"),
                  variable.name = "true", value.name = "value")
 
 p_dat[,model := gsub("true_","",true),]
+
+p_dat[,species2 := factor(species, levels = 1:5, labels = names(pft_cols)),]
+
 p_proc_comp <- ggplot(
   p_dat[type == "process parameter" & process == "competition"], 
   aes(x = name, y = value, color = factor(model), fill = factor(model))
   ) +
   geom_hline(yintercept = 0)+
-  facet_wrap(process~paste0("PFT = ", species), ncol = 5, scales = "fixed") +
+  facet_wrap(process~paste0(species2), ncol = 5, scales = "fixed") +
   theme_classic()+
   geom_bar(width = 0.2, outlier.shape = NA, stat = "identity", position = position_dodge())+
   theme(axis.title.x = element_blank())
@@ -1759,7 +1795,7 @@ p_proc_growth <- ggplot(
     geom_hline(yintercept = 0)+
   scale_color_manual(values = c("process" = "#00BFC4"))+
   scale_fill_manual(values = c("process" = "#00BFC4"))+
-  facet_wrap(process~paste0("PFT = ", species), ncol = 5, scales = "fixed") +
+  facet_wrap(process~paste0(species2), ncol = 5, scales = "fixed") +
   theme_classic()+
   geom_bar(width = 0.2, outlier.shape = NA, stat = "identity", position = position_dodge())+
   theme(axis.title.x = element_blank())
@@ -1768,7 +1804,7 @@ p_proc_mort <- ggplot(
   aes(x = name, y = value, color = factor(model), fill = factor(model))
   ) +
     geom_hline(yintercept = 0)+
-  facet_wrap(process~paste0("PFT = ", species), ncol = 5, scales = "fixed") +
+  facet_wrap(process~paste0(species2), ncol = 5, scales = "fixed") +
   theme_classic()+
   geom_bar(width = 0.2, outlier.shape = NA, stat = "identity", position = position_dodge())+
   theme(axis.title.x = element_blank())
@@ -1777,7 +1813,7 @@ p_proc_reg <- ggplot(
   aes(x = name, y = value, color = factor(model), fill = factor(model))
   ) +
     geom_hline(yintercept = 0)+
-  facet_wrap(process~paste0("PFT = ", species), ncol = 5, scales = "fixed") +
+  facet_wrap(process~paste0(species2), ncol = 5, scales = "fixed") +
   theme_classic()+
   geom_bar(width = 0.2, outlier.shape = NA, stat = "identity", position = position_dodge())+
   theme(axis.title.x = element_blank())
@@ -1792,7 +1828,7 @@ p_env <- ggplot(
        aes(x = factor(name, levels = 1:7, labels = fac_levels), y = value, color = factor(model), fill = factor(model))
   ) +
   geom_hline(yintercept = 0)+
-  facet_wrap(process~paste0("PFT = ", species), ncol = 5, scales = "free_x") +
+  facet_wrap(process~paste0(species2), ncol = 5, scales = "free_x") +
   labs(x = "Parameter", y = "Difference")+
   theme_classic()+
   geom_bar(width = 0.7, outlier.shape = NA, stat = "identity", position = position_dodge2(width = 1.5, padding = 0.2, preserve = "single"))+
