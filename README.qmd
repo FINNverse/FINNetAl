@@ -2,46 +2,41 @@
 title: "README"
 format: gfm
 editor: visual
-bibliography: references.bib
 ---
 
-This repository contains the code to reproduce the results in "Hybrid Modelling of Forest Dynamics with Forest-Informed Neural Network (FINN)"
+# Inferring processes within dynamic forest models using hybrid modeling
 
-## Scripts 
+This repository contains the code to reproduce the results in "**Inferring processes within dynamic forest models using hybrid modeling**" by Maximilian Pichler & Yannek Käber
+
+## Preprint
+
+Preprint can be found on the [arXiv server](https://arxiv.org/abs/2508.01228)
+
+## Data
+
+Results are based on simulated data and on empirical data. The original BCI plot data is available from <https://doi.org/10.15146/5xcp-0d46> , meteorological data from <https://doi.org/10.15486/ngt/1771850>, water potential map from <https://doi.org/10.6084/m9.figshare.c.4372898.v1>, and species list from <https://doi.org/10.1126/science.aaz4797>. The FINN model documentation is provided in the SI Appendix. FINN is available as R package and can be installed from <https://github.com/FINNverse/FINN>.
+
+## Scripts
 
 Scripts to reproduce the analysis can be found in the `code` folder. To rerun everything, run in the following order:
+
+Prepare data (from raw BCI data):
 
 ```{r, eval=FALSE}
 source("code/data_preparation/01-bci-data-preparation.R")
 source("code/data_preparation/01-uholka-data-preparation.R")
 source("code/data_preparation/01b-bci-secundary-forest-preparation.R")
 source("code/data_preparation/02-spatial-holdout-folds-bci.R")
-source("code/data_preparation/02-spatial-holdout-folds-uholka.R")
-source("code/01-fit_full_models-bci.R")
-source("code/01-fit_full_models-uholka.R")
-source("code/02-split-data-bci.R")
-source("code/02-split-data-uholka.R")
-source("code/03-fit_cv_real-bci.R")
-source("code/03-fit_cv_real-uholka.R")
-source("code/03-fit_cv_real_hybrid_growth-bci.R")
-source("code/03-fit_cv_real_hybrid_growth-uholka.R")
-source("code/03-fit_cv_real_hybrid_mort-bci.R")
-source("code/03-fit_cv_real_hybrid_mort-uholka.R")
-source("code/04-simulate-fitted-models.R")
-source("code/04-detailled-model-evaluation.R")
 
 ```
 
+Run simulations and models:
 
+-   Run scripts from 01-07 in the code folder (GPU support is recommended!)
 
-# Results
+## Results
 
 {{< include Results.qmd >}}
-
-# Appendix
-
-{{< include Appendix.qmd >}}
-
 
 ## Session info
 

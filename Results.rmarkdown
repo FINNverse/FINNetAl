@@ -1,5 +1,5 @@
 ---
-title: ""
+title: "Results"
 format: 
   docx:
     keep-md: false
@@ -16,6 +16,11 @@ crossref:
 #knitr::opts_chunk$set(dev = "cairo_pdf")
 knitr::opts_chunk$set(fig.path="figures/", echo = FALSE)
 ```
+
+
+
+# Plotting Functions
+
 
 
 ```{r}
@@ -168,11 +173,13 @@ lines_gam <- function(x, y,
 
 
 
+# Read fitted models
+
+
+
 ```{r}
 #| echo: false
 #| message: false
-
-# Read fitted models
 
 chosen_scale = "pft-period7-25patches"
 fitted_models <- c(
@@ -186,7 +193,11 @@ fitted_models <- fitted_models[grepl("S0_T0",fitted_models)]
 
 
 
-### Figure 2 - Recovery of functional form
+
+
+## Figure 2 - Recovery of functional form
+
+
 
 ```{r}
 #| label: fig-figure_2
@@ -218,7 +229,11 @@ text(x = c(0.5, 3.5, 6.5, 9.5, 12.5, 15.5), levels(cor_dt_form$variable2), y = -
 ```
 
 
-### Figure 3 - Spearman correlation between predicted and observed
+
+
+## Figure 3 - Spearman correlation between predicted and observed
+
+
 
 ```{r}
 #| echo: false
@@ -345,7 +360,7 @@ for(i_hybrid_model in fitted_models_fig4[grepl("hybrid",fitted_models_fig4)]){
 
 ```{r}
 #| label: fig-figure_3
-#| fig-format: png
+#| fig-format: pdf
 #| fig-width: 7
 #| fig-height: 5
 #| echo: false
@@ -405,7 +420,11 @@ p2_full
 
 
 
-### Figure 4 - Succession trajectories
+
+
+## Figure 4 - Succession trajectories
+
+
 
 ```{r}
 #| label: fig-figure_4
@@ -480,7 +499,7 @@ Nsites = uniqueN(env_dt_long$siteID)
 # the disturbance intensity at each timestep is the fraction of patches that is disturbed at that time step
 # here we specify a disturbance frequency of 1%, which means that there is a 1% chance each year that a disturbance occurs
 disturbance_intensity = runif(Ntimesteps*Nsites, 0.0043, 0.016)
-#length(disturbance_intensity)
+length(disturbance_intensity)
 dist_dt <- env_dt_long[,.(siteID, year)]
 # this will result in 0 to 20 % of the patches being disturbed at each timestep with a change of 1% that a disturbance occurs at the timestep
 dist_dt$intensity = rbinom(Ntimesteps*Nsites, 1, disturbance_frequency)*disturbance_intensity
@@ -569,6 +588,8 @@ grid.arrange(
 
 
 
+
+
 <!-- #### boxplots of cv corr -->
 
 <!-- ```{r} -->
@@ -611,7 +632,73 @@ grid.arrange(
 <!-- ``` -->
 
 
-### Figure 5 - Explainable AI
+
+```{r}
+#| label: fig-Fig_cv-cor-only2
+#| fig-format: pdf
+#| fig-width: 7
+#| fig-height: 5
+#| echo: false
+#| silent: true
+#| message: false
+#| warning: false
+#| fig-cap: "Calculated pearson correlation from the five-fold blocked spatial cross-validation. The first two rows show the observed and predicted values for basal area and tree density. The third and fourth row show the observed and predicted values for diameter at breast height (dbh), regeneration, growth, and mortality."
+
+cors_naive = fread("results/cors_naive.csv")
+
+all_cors
+names(cors_naive)[names(cors_naive) == "r"] <- "spearmans_r"
+names(cors_naive)[names(cors_naive) == "var"] <- "variable"
+cors_naive$type2 = "Naive DNN"
+var_labels3 = c("Basal Area [m²/ha]",
+                "Trees [N/ha]",
+                "DBH [cm]",
+                "Regeneration [N/ha]",
+                "Growth [%/100]",
+                "Mortality [%/100]")
+cors_naive[,variable2 := factor(
+    variable, 
+    levels = vars,
+    labels = var_labels3),]
+cors_naive[,species2 := factor(species, levels = 1:5, labels = names(pft_cols)),]
+cors_naive[is.na(species2), species2 := "all",]
+
+all_cors2 <- rbind(all_cors, cors_naive, fill = T)
+
+var_labels3 = c("Basal Area [m²/ha]",
+                "Trees [N/ha]",
+                "DBH [cm]",
+                "Regeneration [N/ha]",
+                "Growth [%/100]",
+                "Mortality [%/100]")
+all_cors2[,variable2 := factor(
+    variable, 
+    levels = vars,
+    labels = var_labels3),]
+
+p2_full = 
+  ggplot(all_cors2, aes(x = type2, y = spearmans_r, color = species2))+
+    geom_hline(yintercept = c(-1,0,1), linetype = "solid", color = "grey50", linewidth = 1)+
+    geom_boxplot(position = position_dodge())+
+    labs(x = "", y = "Spearmans Correlation")+
+    theme_classic()+
+    facet_wrap(~variable2, ncol = 3)+
+    coord_cartesian(ylim = c(-1,1))+
+    # fully remove stip
+    theme(
+          legend.position = "bottom")+
+    #move y axis from left side to right side
+    scale_y_continuous(position = "left", breaks = c(-1,0,1))+
+    scale_color_manual(name = "PFT", values = c(pft_cols, all = "black"))
+p2_full
+```
+
+
+
+
+## Figure 5 - Explainable AI
+
+
 
 ```{r}
 #| label: fig-figure_5
@@ -701,6 +788,8 @@ axis(1, las = 1)
 
 
 ```
+
+
 
 
 <!-- ## Figure 6 (competition) -->
@@ -1358,4 +1447,5 @@ axis(1, las = 1)
 <!-- p_spatial2 -->
 
 <!-- ``` -->
+
 

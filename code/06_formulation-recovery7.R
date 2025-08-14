@@ -4,105 +4,7 @@ library(data.table)
 library(ggplot2)
 library(torch)
 
-#' Draw a GAM smooth (±SE) without plotting points
-#'
-#' @param x,y        numeric vectors (explanatory, response) of equal length.
-#' @param n          grid size for predictions (controls curve resolution).
-#' @param se.mult    SE multiplier (≈2 for 95 % band).
-#' @param add        logical; overlay on current plot (`TRUE`) or start a new
-#'                   blank frame (`FALSE`, default).
-#' @param formula    GAM formula (default = y ~ s(x, bs = "cs")).
-#' @param family     glm family; if NULL and all(y > 0) defaults to
-#'                   `Gamma(link = "log")`, otherwise `gaussian()`.
-#' @param gam_args   named list of extra arguments for `mgcv::gam()` (optional).
-#' @param col,lwd    colour / line-width for the central smooth.
-#' @param se.col,se.lty  colour / lty for the ±SE curves.
-#' @param ...        further arguments passed **only** to `plot()` when
-#'                   `add = FALSE` (axis labels, limits, …).
-#'
-#' @return invisibly a data.frame of x, fit, upr, lwr.
-#'
-#' @examples
-#' set.seed(1)
-#' x <- runif(120, 0, 10)
-#' y <- exp(0.5 * sin(x)) + rlnorm(120, 0, 0.1)
-#'
-#' ## (1) default smooth chosen for positive data
-#' lines_gam(x, y)
-#'
-#' ## (2) a *smoother* curve with REML + higher gamma
-#' plot(x, y, pch = 19, col = "#00000044")
-#' lines_gam(
-#'   x, y,
-#'   add       = TRUE,
-#'   formula   = y ~ s(x, k = 30),     # more basis functions
-#'   gam_args  = list(method = "REML", gamma = 1.6),
-#'   col       = "tomato"
-#' )
-lines_gam <- function(x, y,
-                      n        = 100,
-                      se.mult  = 2,
-                      add      = FALSE,
-                      formula  = NULL,
-                      family   = NULL,
-                      gam_args = list(),
-                      col      = "#6c9fca",
-                      lwd      = 3,
-                      se.col   = col,
-                      se.lty   = 2,
-                      se = F,
-                      ...) {
-  
-  ## --------- sanity checks & setup -----------------------------------------
-  stopifnot(length(x) == length(y))
-  if (!requireNamespace("mgcv", quietly = TRUE))
-    stop("Package 'mgcv' is required; install it with install.packages('mgcv').")
-  
-  dat <- data.frame(x = x, y = y)
-  
-  ## choose family if none supplied
-  if (is.null(family))
-    family <- if (all(y > 0)) Gamma(link = "log") else gaussian()
-  
-  ## default formula if none supplied
-  if (is.null(formula))
-    formula <- y ~ s(x, bs = "cs")
-  
-  ## --------- fit model (extra args allowed) ---------------------------------
-  gam_call <- c(
-    list(formula = formula, data = dat, family = family),
-    gam_args
-  )
-  mod <- do.call(mgcv::gam, gam_call)
-  
-  ## --------- predictions on link scale -------------------------------------
-  xs  <- seq(min(x, na.rm = TRUE), max(x, na.rm = TRUE), length.out = n)
-  pr  <- predict(mod, newdata = data.frame(x = xs), se.fit = TRUE)
-  
-  fit.lin <- pr$fit
-  se.lin  <- pr$se.fit
-  
-  ## back-transform to response scale
-  linkinv <- family$linkinv
-  fit <- linkinv(fit.lin)
-  upr <- linkinv(fit.lin + se.mult * se.lin)
-  lwr <- linkinv(fit.lin - se.mult * se.lin)
-  
-  ## --------- draw -----------------------------------------------------------
-  if (!add) {
-    plot(x, y, type = "n", ...)       # blank plotting region
-  } else if (is.null(dev.list())) {
-    stop("No active graphics device – call plot() first or set add = FALSE.")
-  }
-  
-  lines(xs, fit, col = col,      lwd = lwd)
-  if(se == T){
-    lines(xs, upr, col = se.col,   lty = se.lty)
-    lines(xs, lwr, col = se.col,   lty = se.lty)
-  }
-  
-  invisible(data.frame(x = xs, fit = fit, upr = upr, lwr = lwr))
-}
+
 ## define default parameter settings and simulation setup for FINN ####
 
 Ntimesteps = 20  # number of timesteps
@@ -450,120 +352,124 @@ pred_m1env_dt <- merge(pred_m1env_dt, env_dt, by = c('year', "siteID"))
 pred_m2env_dt <- merge(pred_m2env_dt, env_dt, by = c('year', "siteID"))
 pred_m3env_dt <- merge(pred_m3env_dt, env_dt, by = c('year', "siteID"))
 
-pdf("figures/Cform-recovery-abcd.pdf", width = 6, height = 6)
-par(mfrow = c(1,1), mar = c(4,4,1,1), pty="s", las = 1)
-formula = y ~ s(x,bs="cr",  k= 5)
+# pdf("figures/Cform-recovery-abcd.pdf", width = 6, height = 6)
+# par(mfrow = c(1,1), mar = c(4,4,1,1), pty="s", las = 1)
+# formula = y ~ s(x,bs="cr",  k= 5)
+# # plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment")
+# # plot with rotaed y lab and as perfect square
 # plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment")
-# plot with rotaed y lab and as perfect square
-plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment")
+# # lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
+# # lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
+# # lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
+# # legend("topleft", legend = c("M1 (true form)"), col = c("black"), lty = 1, bty = "n", lwd = 3)
+# # legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
+# # dev.off()
+# 
+# # pdf("figures/Cform-recovery-b.pdf", width = 6, height = 6)
+# # par(mfrow = c(1,1))
+# formula = y ~ s(x,bs="cr",  k= 5)
+# plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment")
+# lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
+# # lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
+# # lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
+# # legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
+# legend("topleft", legend = c("M1 (true form)"), col = c("black"), lty = 1, bty = "n", lwd = 3)
+# 
+# formula = y ~ s(x,bs="cr",  k= 5)
+# plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = NA, ylab = "dbh growth", xlab = "environment")
+# lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
+# # lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
+# # lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
+# # legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
+# legend("topleft", legend = c("M1 (true form)"), col = c("black"), lty = 1, bty = "n", lwd = 3)
+# formula = y ~ s(x,bs="cr",  k= 5)
+# 
+# plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = alpha("black",0.01), ylab = "dbh growth", xlab = "environment")
+# lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
+# # lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
+# # lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
+# # legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
+# legend("topleft", legend = c("M1 (true form)"), col = c("black"), lty = 1, bty = "n", lwd = 3)
+# # dev.off()
+# 
+# # pdf("figures/Cform-recovery-c.pdf", width = 6, height = 6)
+# # par(mfrow = c(1,1))
+# formula = y ~ s(x,bs="cr",  k= 5)
+# plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment")
+# lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
+# lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
+# # lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
+# legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)"), col = c("black", "#fe944e"), lty = 1, bty = "n", lwd = 3)
+# # dev.off()
+# formula = y ~ s(x,bs="cr",  k= 5)
+# plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = NA, ylab = "dbh growth", xlab = "environment")
+# lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
+# lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
+# # lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
+# legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)"), col = c("black", "#fe944e"), lty = 1, bty = "n", lwd = 3)
+# 
+# formula = y ~ s(x,bs="cr",  k= 5)
+# plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = alpha("black",0.01), ylab = "dbh growth", xlab = "environment")
+# points(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = alpha("#fe944e",0.01))
+# lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
+# lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
+# # lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
+# legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)"), col = c("black", "#fe944e"), lty = 1, bty = "n", lwd = 3)
+# # dev.off()
+# 
+# # pdf("figures/Cform-recovery-d.pdf", width = 6, height = 6)
+# # par(mfrow = c(1,1))
+# formula = y ~ s(x,bs="cr",  k= 5)
+# plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment")
 # lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
 # lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
 # lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
+# legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
+# 
+# formula = y ~ s(x,bs="cr",  k= 5)
+# plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = NA, ylab = "dbh growth", xlab = "environment")
+# lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
+# lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
+# lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
+# legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
+# 
+# formula = y ~ s(x,bs="cr",  k= 5)
+# plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = alpha("black",0.01), ylab = "dbh growth", xlab = "environment")
+# points(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = alpha("#fe944e",0.01))
+# points(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = alpha("#6c9fca",0.01))
+# lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
+# lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
+# lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
+# legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
+# dev.off()
+# 
+# #pdf("figures/Cform-recovery_all.pdf", width = 10, height = 10)
+# par(mfrow = c(2,2), mar = c(4,4,2,1), pty="s", las = 1)
+# formula = y ~ s(x, k = 5)
+# ylim = c(0,8.7)
+# plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment", ylim = ylim)
+# mtext("a", side = 3, line = 0.5, adj = -0.3, font = 2)  # 'a' at top-left
+# lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
 # legend("topleft", legend = c("M1 (true form)"), col = c("black"), lty = 1, bty = "n", lwd = 3)
-# legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
-# dev.off()
-
-# pdf("figures/Cform-recovery-b.pdf", width = 6, height = 6)
-# par(mfrow = c(1,1))
-formula = y ~ s(x,bs="cr",  k= 5)
-plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment")
-lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
+# plot(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment", ylim = ylim)
+# mtext("b", side = 3, line = 0.1, adj = -0.3, font = 2)  # 'a' at top-left
+# lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
+# legend("topleft", legend = c("M2 (wrong form)"), col = c("#fe944e"), lty = 1, bty = "n", lwd = 3)
+# plot(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment", ylim = ylim)
+# mtext("c", side = 3, line = 0.1, adj = -0.3, font = 2)  # 'a' at top-left
+# lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
+# legend("topleft", legend = c("M3 (hybrid model)"), col = c("#6c9fca"), lty = 1, bty = "n", lwd = 3)
+# 
+# 
+# ##
+# plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = NA, ylab = "dbh growth", xlab = "environment", ylim = ylim)
+# mtext("d", side = 3, line = 0.1, adj = -0.3, font = 2)  # 'a' at top-left
+# lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
 # lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
 # lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
 # legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
-legend("topleft", legend = c("M1 (true form)"), col = c("black"), lty = 1, bty = "n", lwd = 3)
-
-formula = y ~ s(x,bs="cr",  k= 5)
-plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = NA, ylab = "dbh growth", xlab = "environment")
-lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
-# lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
-# lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
-# legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
-legend("topleft", legend = c("M1 (true form)"), col = c("black"), lty = 1, bty = "n", lwd = 3)
-formula = y ~ s(x,bs="cr",  k= 5)
-
-plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = alpha("black",0.01), ylab = "dbh growth", xlab = "environment")
-lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
-# lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
-# lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
-# legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
-legend("topleft", legend = c("M1 (true form)"), col = c("black"), lty = 1, bty = "n", lwd = 3)
-# dev.off()
-
-# pdf("figures/Cform-recovery-c.pdf", width = 6, height = 6)
-# par(mfrow = c(1,1))
-formula = y ~ s(x,bs="cr",  k= 5)
-plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment")
-lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
-lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
-# lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
-legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)"), col = c("black", "#fe944e"), lty = 1, bty = "n", lwd = 3)
-# dev.off()
-formula = y ~ s(x,bs="cr",  k= 5)
-plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = NA, ylab = "dbh growth", xlab = "environment")
-lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
-lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
-# lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
-legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)"), col = c("black", "#fe944e"), lty = 1, bty = "n", lwd = 3)
-
-formula = y ~ s(x,bs="cr",  k= 5)
-plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = alpha("black",0.01), ylab = "dbh growth", xlab = "environment")
-points(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = alpha("#fe944e",0.01))
-lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
-lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
-# lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
-legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)"), col = c("black", "#fe944e"), lty = 1, bty = "n", lwd = 3)
-# dev.off()
-
-# pdf("figures/Cform-recovery-d.pdf", width = 6, height = 6)
-# par(mfrow = c(1,1))
-formula = y ~ s(x,bs="cr",  k= 5)
-plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment")
-lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
-lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
-lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
-legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
-
-formula = y ~ s(x,bs="cr",  k= 5)
-plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = NA, ylab = "dbh growth", xlab = "environment")
-lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
-lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
-lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
-legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
-
-formula = y ~ s(x,bs="cr",  k= 5)
-plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = alpha("black",0.01), ylab = "dbh growth", xlab = "environment")
-points(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = alpha("#fe944e",0.01))
-points(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = alpha("#6c9fca",0.01))
-lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
-lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
-lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
-legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
-dev.off()
-
-pdf("figures/Cform-recovery_all.pdf", width = 10, height = 10)
-par(mfrow = c(2,2), mar = c(4,4,2,1), pty="s", las = 1)
-formula = y ~ s(x, k = 5)
-ylim = c(0,8.7)
-plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment", ylim = ylim)
-mtext("a", side = 3, line = 0.5, adj = -0.3, font = 2)  # 'a' at top-left
-lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
-legend("topleft", legend = c("M1 (true form)"), col = c("black"), lty = 1, bty = "n", lwd = 3)
-plot(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment", ylim = ylim)
-mtext("b", side = 3, line = 0.1, adj = -0.3, font = 2)  # 'a' at top-left
-lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
-legend("topleft", legend = c("M2 (wrong form)"), col = c("#fe944e"), lty = 1, bty = "n", lwd = 3)
-plot(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "grey70", ylab = "dbh growth", xlab = "environment", ylim = ylim)
-mtext("c", side = 3, line = 0.1, adj = -0.3, font = 2)  # 'a' at top-left
-lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
-legend("topleft", legend = c("M3 (hybrid model)"), col = c("#6c9fca"), lty = 1, bty = "n", lwd = 3)
-plot(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = NA, ylab = "dbh growth", xlab = "environment", ylim = ylim)
-mtext("d", side = 3, line = 0.1, adj = -0.3, font = 2)  # 'a' at top-left
-lines_gam(pred_m1env_dt$env1, (pred_m1env_dt$growth*pred_m1env_dt$dbh), col = "black", add = T, formula = formula, ylim = c(0,3))
-lines_gam(pred_m2env_dt$env1, (pred_m2env_dt$growth*pred_m2env_dt$dbh), col = "#fe944e", add = T, formula = formula, ylim = c(0,3))
-lines_gam(pred_m3env_dt$env1, (pred_m3env_dt$growth*pred_m3env_dt$dbh), col = "#6c9fca", add = T, formula = formula, ylim = c(0,3))
-legend("topleft", legend = c("M1 (true form)", "M2 (wrong form)", "M3 (hybrid model)"), col = c("black", "#fe944e", "#6c9fca"), lty = 1, bty = "n", lwd = 3)
-dev.off()
+# 
+# #dev.off()
 
 
 
@@ -605,30 +511,34 @@ var_labels3 = c("Basal Area\n[m²/ha]",
                 "Mortality\n[%/100]")
 cor_dt[, variable2 := factor(variable, levels = c("ba","trees","dbh","r_mean_ha","growth", "mort"), labels = var_labels3),]
 
-pdf("figures/Cform-recovery-cors.pdf", width = 6, height = 6)
-ggplot(cor_dt[variable != "reg"], aes(x = variable2, y = r, color = model))+
-  geom_hline(yintercept = c(0,1), color = "grey50") +
-  geom_boxplot()+
-  labs(y = "Spearmans R") +
-  ggthemes::theme_base()+
-  scale_y_continuous(breaks = seq(-1,1,0.2))+
-  scale_color_manual(values = c("#fe944e","#6c9fca"))+  # theme(plot.title = element_text(hjust = 0.5, face = "bold"))
-  scale_fill_manual(values = c("#fe944e","#6c9fca"))+  # theme(plot.title = element_text(hjust = 0.5, face = "bold"))
-  theme(
-    legend.title = element_blank(),
-    plot.title       = element_text(hjust = 0.5, face = "bold"),axis.title.x = element_blank(),
-    # put legend *inside* the plotting area:
-    legend.position  = c(0.3, 0.4),   # (x, y) in NPC units
-    legend.direction = "vertical",
-    legend.background = element_rect(
-      fill   = alpha("white", 0.6),     # translucent white background
-      colour = NA
-    ),
-    # remove box around plot
-    panel.border = element_blank()
-  )
-dev.off()
+# pdf("figures/Cform-recovery-cors.pdf", width = 6, height = 6)
+# ggplot(cor_dt[variable != "reg"], aes(x = variable2, y = r, color = model))+
+#   geom_hline(yintercept = c(0,1), color = "grey50") +
+#   geom_boxplot()+
+#   labs(y = "Spearmans R") +
+#   ggthemes::theme_base()+
+#   scale_y_continuous(breaks = seq(-1,1,0.2))+
+#   scale_color_manual(values = c("#fe944e","#6c9fca"))+  # theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+#   scale_fill_manual(values = c("#fe944e","#6c9fca"))+  # theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+#   theme(
+#     legend.title = element_blank(),
+#     plot.title       = element_text(hjust = 0.5, face = "bold"),axis.title.x = element_blank(),
+#     # put legend *inside* the plotting area:
+#     legend.position  = c(0.3, 0.4),   # (x, y) in NPC units
+#     legend.direction = "vertical",
+#     legend.background = element_rect(
+#       fill   = alpha("white", 0.6),     # translucent white background
+#       colour = NA
+#     ),
+#     # remove box around plot
+#     panel.border = element_blank()
+#   )
+# dev.off()
+# 
+# 
 
 
 
+cor_dt_form= cor_dt
+save(pred_m1env_dt, pred_m2env_dt, pred_m3env_dt,  cor_dt_form, file = "functional_form.RData")
 

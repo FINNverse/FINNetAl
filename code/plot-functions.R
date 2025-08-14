@@ -325,7 +325,7 @@ build_model_dt <- function(pt_file) {
   # -------------------------------------------------------------------------
   # 1) Load the .pt model
   # -------------------------------------------------------------------------
-  cat("\nLoading model:", pt_file, "\n")
+  #cat("\nLoading model:", pt_file, "\n")
   m <- torch_load(pt_file)
 
   # -------------------------------------------------------------------------
@@ -362,7 +362,7 @@ build_model_dt <- function(pt_file) {
   # -------------------------------------------------------------------------
   # 3) Read the CSV files (wide obs, environment, cohorts)
   # -------------------------------------------------------------------------
-  cat("Reading observation and environment data...\n")
+  #cat("Reading observation and environment data...\n")
   obs_dt_train <- fread(file.path(data_dir, paste0("obs_dt_", cv_S, "_", cv_T, "_train.csv")))
   obs_dt_test  <- fread(file.path(data_dir, paste0("obs_dt_", cv_S, "_", cv_T, "_test.csv")))
 
@@ -383,7 +383,7 @@ build_model_dt <- function(pt_file) {
   # -------------------------------------------------------------------------
   # 4) Simulate predictions (FINN automatically provides a wide version)
   # -------------------------------------------------------------------------
-  cat("Simulating predictions...\n")
+  #cat("Simulating predictions...\n")
   pred_train <- m$simulate(env = env_dt_train, init_cohort = cohorts_train, patches = Npatches)
   pred_test  <- m$simulate(env = env_dt_test,  init_cohort = cohorts_test,  patches = Npatches)
 
@@ -453,7 +453,7 @@ build_model_dt <- function(pt_file) {
   # -------------------------------------------------------------------------
   # 7) Combine train + test
   # -------------------------------------------------------------------------
-  cat("Combining train + test sets...\n")
+  #cat("Combining train + test sets...\n")
   final_dt <- rbindlist(list(train_merged, test_merged), use.names = TRUE)
 
   final_dt[, trees.obs_before := shift(trees.obs, 1, type = "lag"), by = .(siteID,species,test_train)]

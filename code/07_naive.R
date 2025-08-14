@@ -137,36 +137,36 @@ ggplot(cors_dt[k != 0], aes(x = factor(species), y = r))+
 fwrite(cors_dt[k != 0], "results/cors_naive.csv")
 
 
-
-init = test[1:5,]
-init[,10:15] = 0.0
-init
-predictions_eq = data.frame()
-for(i in 1:500) {
-  pred = predict(m, newdata = init)
-  pred[,3] = exp(pred[,3])
-  pred[,6] = exp(pred[,6])
-  pred = jitter(pred, factor = 2)
-  pred[pred<0] = 0
-  colnames(pred) = c("dbh.x", "ba.x", "trees.x", "growth.x", "mort.x", "reg.x")
-  init[,10:15] = (pred - matrix(centers[1:6], nrow = nrow(pred), ncol = 6L, byrow = TRUE) )/ matrix(scales[1:6], nrow = nrow(pred), ncol = 6L, byrow = TRUE)
-  
-  init[,16:21] = as.matrix(test[sample.int(nrow(test), 1),16:21], nrow = 5, ncol = 6, byrow = TRUE)
-  
-  pred = data.frame(pred)
-  pred$siteID = 1
-  pred$species = init$species
-  pred$year = i
-  predictions_eq = rbind(predictions_eq, pred)
-}
-predictions_eq = as.data.table(predictions_eq)[,.(dbh.x = mean(dbh.x), ba.x = mean(ba.x), trees.x = mean(trees.x), growth.x = mean(growth.x), mort.x = mean(mort.x), reg.x = mean(reg.x)), by = .(species, year)]
-
-par(mfrow = c(2, 3))
-counter = 1
-mins = c(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-maxs = c(13, 5.0, 350, 0.35, 0.35, 350)
-for(var in colnames(predictions_eq)[-(1:2)]) {
-  matplot(sapply(1:5, function(i) predictions_eq[species==i][[var]]), type = "l", lty = 1, lwd = 2.0, main = var, ylim = c(mins[counter], maxs[counter]))
-  counter = counter +1
-}
+# 
+# init = test[1:5,]
+# init[,10:15] = 0.0
+# init
+# predictions_eq = data.frame()
+# for(i in 1:500) {
+#   pred = predict(m, newdata = init)
+#   pred[,3] = exp(pred[,3])
+#   pred[,6] = exp(pred[,6])
+#   pred = jitter(pred, factor = 2)
+#   pred[pred<0] = 0
+#   colnames(pred) = c("dbh.x", "ba.x", "trees.x", "growth.x", "mort.x", "reg.x")
+#   init[,10:15] = (pred - matrix(centers[1:6], nrow = nrow(pred), ncol = 6L, byrow = TRUE) )/ matrix(scales[1:6], nrow = nrow(pred), ncol = 6L, byrow = TRUE)
+#   
+#   init[,16:21] = as.matrix(test[sample.int(nrow(test), 1),16:21], nrow = 5, ncol = 6, byrow = TRUE)
+#   
+#   pred = data.frame(pred)
+#   pred$siteID = 1
+#   pred$species = init$species
+#   pred$year = i
+#   predictions_eq = rbind(predictions_eq, pred)
+# }
+# predictions_eq = as.data.table(predictions_eq)[,.(dbh.x = mean(dbh.x), ba.x = mean(ba.x), trees.x = mean(trees.x), growth.x = mean(growth.x), mort.x = mean(mort.x), reg.x = mean(reg.x)), by = .(species, year)]
+# 
+# par(mfrow = c(2, 3))
+# counter = 1
+# mins = c(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+# maxs = c(13, 5.0, 350, 0.35, 0.35, 350)
+# for(var in colnames(predictions_eq)[-(1:2)]) {
+#   matplot(sapply(1:5, function(i) predictions_eq[species==i][[var]]), type = "l", lty = 1, lwd = 2.0, main = var, ylim = c(mins[counter], maxs[counter]))
+#   counter = counter +1
+# }
 
