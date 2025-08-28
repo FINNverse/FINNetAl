@@ -47,7 +47,7 @@ Run simulations and models:
 
 <div id="fig-figure_2">
 
-![](figures/fig-figure_2-1.png)
+![](figures/fig-figure_2-1.pdf)
 
 **Figure** 1: Hybrid-FINN recovers the functional form of a process and
 improves predictive performance. To test whether Hybrid-FINN can recover
@@ -70,7 +70,7 @@ site over 500 simulated timesteps.
 
 <div id="fig-figure_3">
 
-![](figures/fig-figure_3-1.png)
+![](figures/fig-figure_3-1.pdf)
 
 **Figure** 2: Spearman correlation of observed and simulated variables
 for five PFTs from the five-fold blocked spatial cross-validation of all
@@ -88,7 +88,7 @@ environment as input. PFTs are according to Rüger et al. (2020)
 
 <div id="fig-figure_4">
 
-![](figures/fig-figure_4-1.png)
+![](figures/fig-figure_4-1.pdf)
 
 **Figure** 3: Simulated successional trajectories of stand
 characteristics and demographic rates of five PFTs for Process-FINN (a)
@@ -106,7 +106,7 @@ Rüger et al. (2020) was used.
 
 <!-- #| label: fig-Fig_cv-cor-only -->
 
-<!-- #| fig-format: png -->
+<!-- #| fig-format: pdf -->
 
 <!-- #| fig-width: 7 -->
 
@@ -178,7 +178,7 @@ Rüger et al. (2020) was used.
 
 <div id="fig-figure_5">
 
-![](figures/fig-figure_5-1.png)
+![](figures/fig-figure_5-1.pdf)
 
 **Figure** 4: Simulated relative growth response to available light and
 tree size (dbh) for 5 PFTs for the hybrid model (a) and the process
@@ -194,7 +194,7 @@ is the observed soil water potential.
 
 <!-- #| label: fig-Fig_6 -->
 
-<!-- #| fig-format: png -->
+<!-- #| fig-format: pdf -->
 
 <!-- #| fig-width: 10 -->
 
@@ -478,7 +478,7 @@ is the observed soil water potential.
 
 <!-- #| label: fig-Fig_7 -->
 
-<!-- #| fig-format: png -->
+<!-- #| fig-format: pdf -->
 
 <!-- #| fig-width: 11 -->
 
@@ -580,7 +580,7 @@ is the observed soil water potential.
 
 <!-- #| label: fig-Fig_emerg_patterns -->
 
-<!-- #| fig-format: png -->
+<!-- #| fig-format: pdf -->
 
 <!-- #| fig-width: 9 -->
 
@@ -812,7 +812,7 @@ is the observed soil water potential.
 
 <!-- #| label: fig-Fig_response-cors -->
 
-<!-- #| fig-format: png -->
+<!-- #| fig-format: pdf -->
 
 <!-- #| fig-width: 10 -->
 
@@ -876,7 +876,7 @@ is the observed soil water potential.
 
 <!-- #| label: fig-Fig_hybridvariant-cors -->
 
-<!-- #| fig-format: png -->
+<!-- #| fig-format: pdf -->
 
 <!-- #| fig-width: 10 -->
 
@@ -964,7 +964,7 @@ is the observed soil water potential.
 
 <!-- #| label: fig-Fig_fitted_parameters -->
 
-<!-- #| fig-format: png -->
+<!-- #| fig-format: pdf -->
 
 <!-- #| fig-width: 10 -->
 
