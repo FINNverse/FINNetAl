@@ -489,6 +489,8 @@ pred_hybrid = hybrid_m$simulate(env = env_dt_long, disturbance = dist_dt, init_c
 
 pred_process = process_m$simulate(env = env_dt_long, disturbance = dist_dt, init_cohort = NULL, patches = 20, patch_size = 0.1)
 
+naive_preds <- fread("results/naive_succession.csv")
+
 patch_size = 0.1
 predictions = list()
 predictions[["pred_hybrid"]] = pred_hybrid

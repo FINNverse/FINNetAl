@@ -7,7 +7,9 @@ library(cito)
 
 preds_all <- data.table()
 true_all <- data.table()
-k=1
+k=0
+
+m_list <- list()
 for(k in 0:5){
   obs_dt_train <- fread(paste0("data/BCI/CVsplits-realdata/pft-period7-25patches/obs_dt_S",k,"_T0_train.csv"))
   obs_dt_train <- obs_dt_train[,.(siteID, year, species, dbh, ba, trees, growth, mort, reg)]
@@ -65,6 +67,11 @@ for(k in 0:5){
   m = dnn(cbind(dbh.x, ba.x, trees.x, growth.x, mort.x, reg.x)~dbh.y + ba.y +trees.y + growth.y + mort.y + reg.y + Prec.y + SR_kW_m2.y+RH_prc.y+T_max.y+T_min.y+swp.y+e(species, dim = 2),
           data = train , loss = custom, lr = 0.001,optimizer = "adam", burnin = Inf, plot = F, epochs = 200)
   
+  m_list[[paste0("k",k)]][["m"]] <- m
+  m_list[[paste0("k",k)]][["test"]] <- test
+  m_list[[paste0("k",k)]][["centers_train"]] <- centers_train
+  m_list[[paste0("k",k)]][["scales_train"]] <- scales_train
+  
   tmp = test
   predictions = data.frame()
   for(i in 2:6) {
@@ -88,6 +95,80 @@ for(k in 0:5){
   
 }
 
+
+test = m_list$k0$test
+centers_train = m_list$k0$centers_train
+scales_train = m_list$k0$scales_train
+
+
+env_dt <- unique(data.table(test[,c("year.x","siteID", "Prec.y", "SR_kW_m2.y",  "RH_prc.y",    "T_max.y", "T_min.y", "swp.y")]))
+env_dt$year.x <- as.integer(as.factor(env_dt$year.x))
+env_dt_long <- data.table()
+start_t = 0
+k = 1
+for(k in 1:20){
+  env_dt_temp = copy(env_dt)
+  # randomly shuffle years in env_dt
+  env_dt_temp$year.x = env_dt_temp$year.x+start_t
+  env_dt_temp[,year.x := year.x[sample(length(year.x))], by = siteID]
+  # env_dt_temp$year = env_dt_temp$year[sample(length(env_dt_temp$year), replace = F)]
+  env_dt_long = rbind(env_dt_long, env_dt_temp)
+  start_t = max(env_dt_long$year)
+  # if(start_t > ceiling(80/uniqueN(env_dt$year))) break
+}
+
+tmp <- data.frame()
+for(i in 1:max(env_dt_long$year.x)){
+  newdat <- rbind(data.table(test[0,]),do.call(rbind, lapply(1:5, function(x) data.table(env_dt_long[year.x == i], species = x))),use.names=T, fill = T)
+  tmp <- rbind(tmp, newdat)
+}
+tmp[tmp$year.x == 1,c("dbh.y", "ba.y", "trees.y", "growth.y", "mort.y", "reg.y")] <- 0.0
+tmp <- data.frame(tmp)
+predictions = data.frame()
+i=1
+i
+for(i in 1:max(env_dt_long$year.x)) {
+  pred = predict(m, newdata = tmp[tmp$year.x == i,])
+  pred[,3] = exp(pred[,3])
+  pred[,6] = exp(pred[,6])
+  pred[pred<0] = 0
+  pred[is.na(pred)] = 0.0
+  
+  colnames(pred) = c("dbh.x", "ba.x", "trees.x", "growth.x", "mort.x", "reg.x")
+  if(i < max(env_dt_long$year.x)) tmp[tmp$year.x == (i+1),10:15] = (pred - matrix(centers_train[1:6], nrow = nrow(pred), ncol = 6L, byrow = TRUE) )/ matrix(scales_train[1:6], nrow = nrow(pred), ncol = 6L, byrow = TRUE) 
+  pred = data.frame(pred)
+  pred$siteID = tmp[tmp$year.x == i,]$siteID
+  pred$species = tmp[tmp$year.x == i,]$species
+  pred$year = i
+  
+  predictions = rbind(predictions, pred)
+}
+
+
+
+preds_long_dt <- melt(data.table(predictions), id.vars = c("species", "year","siteID"))
+preds_long_dt <- preds_long_dt[, .(value = mean(value, na.rm = T)), by = .(variable,species, year)]
+
+preds_long_dt[value > 1000, value := NA,]
+
+pft_cols <- c(
+  Slow                         = "#BF7DA5",  # pink-mauve
+  Fast                         = "#DBA242",  # ochre-orange
+  `Long-lived pioneer (LLP)`   = "#479C77",  # medium green
+  `Short-lived breeder (SLB)`  = "#3471AE",  # mid blue
+  Intermediate                 = "#C36837"   # terracotta
+)
+pft_cols_int <- pft_cols
+names(pft_cols_int) <- 1:5
+
+preds_long_dt[,species2 := factor(species, levels = 1:5, labels = names(pft_cols)),]
+
+ggplot(preds_long_dt, aes(x = year, y = value))+
+  geom_line(aes(color = factor(species2)))+
+  facet_wrap(~variable, scales = "free_y")+
+  scale_color_manual(name = "PFT", values = pft_cols)
+
+fwrite(preds_long_dt, "results/naive_succession.csv")
 
 
 k=1
