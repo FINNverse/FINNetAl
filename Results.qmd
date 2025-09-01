@@ -573,7 +573,57 @@ grid.arrange(
 
 ```
 
+```{r}
+results_naive = data.table(read.csv("results/naive_succession.csv"))
+results_naive[variable=="ba.x"]$value = results_naive[variable=="ba.x"]$value
+results_naive[variable=="dbh.x"]$value = results_naive[variable=="dbh.x"]$value
 
+results_naive$year = rep(rep(seq(0, 594, by = 6), each = 5),6)
+
+
+results_naive[, variable2 := factor(
+  variable,
+  levels = c("ba.x", "trees.x", "dbh.x", "growth.x", "mort.x", "reg.x"),
+  labels =  c("Basal Area [m²/ha]", "Trees [N/ha]", "avg. DBH [cm]",
+               "Growth [%/100]", "Mortality [%/100]", 
+              "Reg. Mean [N/ha]")
+  ),]
+
+results_naive$variable 
+
+  p <- ggplot(results_naive, aes(x = year, y = value, color = species2)) +
+    geom_line(linewidth = 1) +
+    labs(x = "Year", y = "Value") +
+    coord_cartesian(ylim = c(0, NA)) +
+    facet_wrap(~variable2, scales = "free_y", ncol = 2, strip.position = "left") +  # Remove label_parsed
+     #geom_blank(data=p_dat_dummy) + 
+    theme_classic() +
+    # ylab("Basal Area [m²/ha]") +
+    scale_color_manual(
+      name = "PFT", values = pft_cols)+
+    theme(
+    axis.title.y = element_blank(),
+    strip.placement = "outside",
+    strip.text.y.left = element_text(angle = 90),
+    strip.background = element_blank(),
+    legend.position = "bottom",
+    legend.key.size = unit(0.001, "mm"),
+    legend.key.width = unit(2, "line")
+    # legend.position.inside = c(0.9,0.2),
+    # legend.background = element_rect(color = "black", fill = NA)
+  )+
+    guides(color = guide_legend(ncol = 1,byrow = TRUE))
+    # ggtitle(paste0("patches = ",gsub("patches_", "", i)))
+  legend_p <- get_legend(p)
+  
+
+  pdf("figures/figure_appendix_naive_succession.pdf", width = 5, height = 6 )
+  p
+  dev.off()
+
+```
+<!--   #| fig-width: 10 -->
+<!-- #| fig-height: 6 -->
 
 <!-- #### boxplots of cv corr -->
 
