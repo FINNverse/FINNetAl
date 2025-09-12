@@ -399,11 +399,10 @@ p2_full =
     facet_wrap(~variable2, ncol = 3)+
     coord_cartesian(ylim = c(-1,1))+
     # fully remove stip
-    theme(
-          legend.position = "bottom")+
+    theme(legend.position = "bottom")+
     #move y axis from left side to right side
     scale_y_continuous(position = "left", breaks = c(-1,0,1))+
-    scale_color_manual(name = "PFT", values = c(pft_cols, all = "black")) + guides(colour = guide_legend(nrow = 1))
+    scale_color_manual(name = "PFT", values = c(pft_cols, all = "black")) + guides(colour = guide_legend(nrow = 2))
 p2_full
 ```
 
