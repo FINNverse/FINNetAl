@@ -572,6 +572,236 @@ grid.arrange(
 
 ```
 
+### Figure 4b - Succession trajectories
+
+
+```{r}
+#| label: fig-figure_4b
+#| fig-format: pdf
+#| fig-width: 10
+#| fig-height: 6
+#| echo: false
+#| silent: true
+#| message: false
+#| warning: false
+#| fig-cap: "Simulated successional trajectories of stand characteristics and demographic rates of five PFTs for Process-FINN (a) and Hybrid-FINN (b), where the growth process is replaced by a DNN. Note that rates are not annual and represent changes of five year intervals. Both models were trained with the BCI forest data with 7 censuses. Forest dynamics were simulated for 600 years. Disturbance regime of Rüger et al. (2020) was used."
+
+obs_dt <- fread("data/BCI/noSplits/pft-period7-25patches/obs_dt.csv")
+
+obs_dt[,species2 := factor(species,levels = 1:5, labels = names(pft_cols)),]
+
+var_levels <- c("ba", "trees", "dbh", "AL", "growth", "mort", "r_mean_ha")
+var_labels <- c(
+  "Basal Area [m²/ha]",
+  "Trees [N/ha]",
+  "avg. DBH [cm]",
+  "Available Light [%]",
+  "Growth [%/100]",
+  "Mortality [%/100]",
+  "Reg. Mean [N/ha]"
+)
+
+obs_dt_year <- obs_dt[, .(
+  ba        = mean(ba, na.rm = TRUE) / 0.1,
+  trees     = mean(trees, na.rm = TRUE) / 0.1,
+  dbh       = mean(dbh, na.rm = TRUE),
+  growth    = mean(growth, na.rm = TRUE),
+  mort      = mean(mort, na.rm = TRUE),
+  r_mean_ha = mean(reg, na.rm = TRUE)
+), by = .(year, species2)]
+
+avg_obs_dt <- obs_dt_year[, .(
+  ba        = mean(ba, na.rm = TRUE),
+  trees     = mean(trees, na.rm = TRUE),
+  dbh       = mean(dbh, na.rm = TRUE),
+  growth    = mean(growth, na.rm = TRUE),
+  mort      = mean(mort, na.rm = TRUE),
+  r_mean_ha = mean(r_mean_ha, na.rm = TRUE)
+), by = .(species2)]
+
+avg_obs_dt_max <- obs_dt_year[, .(
+  ba        = max(ba, na.rm = TRUE),
+  trees     = max(trees, na.rm = TRUE),
+  dbh       = max(dbh, na.rm = TRUE),
+  growth    = max(growth, na.rm = TRUE),
+  mort      = max(mort, na.rm = TRUE),
+  r_mean_ha = max(r_mean_ha, na.rm = TRUE)
+), by = species2]
+
+avg_obs_dt_min <- obs_dt_year[, .(
+  ba        = min(ba, na.rm = TRUE),
+  trees     = min(trees, na.rm = TRUE),
+  dbh       = min(dbh, na.rm = TRUE),
+  growth    = min(growth, na.rm = TRUE),
+  mort      = min(mort, na.rm = TRUE),
+  r_mean_ha = min(r_mean_ha, na.rm = TRUE)
+), by = species2]
+
+obs_dt_year2 <- melt(obs_dt_year,     id.vars = c("year","species2"), variable.name = "variable", value.name = "value")
+avg_obs_dt2 <- melt(avg_obs_dt,     id.vars = "species2", variable.name = "variable", value.name = "value")
+avg_obs_dt2_max <- melt(avg_obs_dt_max, id.vars = "species2", variable.name = "variable", value.name = "value")
+avg_obs_dt2_min <- melt(avg_obs_dt_min, id.vars = "species2", variable.name = "variable", value.name = "value")
+
+for (dt in list(avg_obs_dt2, avg_obs_dt2_max, avg_obs_dt2_min,obs_dt_year2)) {
+  dt[, variable2 := factor(variable, levels = var_levels, labels = var_labels)]
+}
+
+
+## Simulate equilibrium from fitted models
+# load fitted BCI models
+hybrid_m = torch::torch_load(fitted_models[grepl("hybrid",fitted_models)])
+process_m = torch::torch_load(fitted_models[!grepl("hybrid",fitted_models)])
+
+i_name = "pft-period7-25patches"
+# # read full raw data
+# obs_dt2 = fread(paste0("data/BCI/noSplits/", i_name,"/obs_dt.csv"))
+# obs_dt = fread(paste0("data/BCIsecf/stand_dt_secf.csv"))
+# cohorts_dt2 = fread(paste0("data/BCI/noSplits/", i_name,"/initial_cohorts1985.csv"))
+# cohorts_dt = fread(paste0("data/BCIsecf/initial_cohorts_10patches_0.1ha_age40.csv"))
+# cohorts_dt$dbh = cohorts_dt$dbh_cm
+env_dt = fread(paste0("data/BCI/noSplits/", i_name,"/env_dt.csv"))
+# obs_dt = fread(paste0("data/BCI/noSplits/", i_name,"/obs_dt.csv"))
+
+# predict for model
+# cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = uniqueN(obs_dt$species))
+
+# create artificial time series
+env_dt_long <- data.table()
+start_t = 0
+for(k in 1:40){
+  env_dt_temp = copy(env_dt)
+  # randomly shuffle years in env_dt
+  env_dt_temp$year = env_dt_temp$year+start_t
+  env_dt_temp[,year := year[sample(length(year))], by = siteID]
+  # env_dt_temp$year = env_dt_temp$year[sample(length(env_dt_temp$year), replace = F)]
+  env_dt_long = rbind(env_dt_long, env_dt_temp)
+  start_t = max(env_dt_long$year)
+  # if(start_t > ceiling(80/uniqueN(env_dt$year))) break
+}
+# env_dt_long$swp = 0
+# env_dt_long[,":="(
+#   Prec = mean(Prec),
+#   SR_kW_m2 = mean(SR_kW_m2),
+#   RH_prc = mean(RH_prc),
+#   T_max = mean(T_max),
+#   T_min = mean(T_min)
+# ), by = siteID]
+# here we specify a disturbance frequency of 1%, which means that there is a 1% chance each year that a disturbance occurs
+disturbance_frequency = 1
+
+Ntimesteps = uniqueN(env_dt_long$year)
+Ntimesteps = max(env_dt_long$year)
+Nsites = uniqueN(env_dt_long$siteID)
+# the disturbance intensity at each timestep is the fraction of patches that is disturbed at that time step
+# here we specify a disturbance frequency of 1%, which means that there is a 1% chance each year that a disturbance occurs
+disturbance_intensity = runif(Ntimesteps*Nsites, 0.0043, 0.016)
+#length(disturbance_intensity)
+dist_dt <- env_dt_long[,.(siteID, year)]
+# this will result in 0 to 20 % of the patches being disturbed at each timestep with a change of 1% that a disturbance occurs at the timestep
+dist_dt$intensity = rbinom(Ntimesteps*Nsites, 1, disturbance_frequency)*disturbance_intensity
+
+pred_hybrid = hybrid_m$simulate(env = env_dt_long, disturbance = dist_dt, init_cohort = NULL, patches = 20, patch_size = 0.1)
+
+pred_process = process_m$simulate(env = env_dt_long, disturbance = dist_dt, init_cohort = NULL, patches = 20, patch_size = 0.1)
+
+naive_preds <- fread("results/naive_succession.csv")
+
+patch_size = 0.1
+predictions = list()
+predictions[["pred_hybrid"]] = pred_hybrid
+predictions[["pred_process"]] = pred_process
+p_list = list()
+for(i in c("pred_hybrid","pred_process")){
+  p_dat <- predictions[[i]]$long$site[, .(value = mean(value)), by = .(year = 1+(year-1)*5, species, variable)]
+  p_dat$model = i
+  p_dat[,species2 := factor(species, levels = 1:5, labels = names(pft_cols)),]
+  p_dat[, variable2 := factor(
+  variable,
+  levels = c("ba", "trees", "dbh", "AL", "growth", "mort", "r_mean_ha"),
+  labels =  c("Basal Area [m²/ha]", "Trees [N/ha]", "avg. DBH [cm]",
+              "Available Light [%]", "Growth [%/100]", "Mortality [%/100]", 
+              "Reg. Mean [N/ha]")
+  ),]
+  p_dat <- p_dat[!is.na(variable2)]
+  p_dat[variable %in% c("ba", "trees"), value := value/patch_size,]
+  
+  p_dat_dummy = data.table::copy(p_dat)
+  p_dat_dummy[variable == "dbh"][1:2]$value = c(0, 18)
+  p_dat_dummy[variable == "ba"][1:2]$value = c(0, 40)
+  p_dat_dummy[variable == "trees"][1:2]$value = c(0, 3000)
+  p_dat_dummy[variable == "growth"][1:2]$value = c(0, 1.2)
+  p_dat_dummy[variable == "mort"][1:2]$value = c(0, 0.5)
+  p_dat_dummy[variable == "r_mean_ha"][1:2]$value = c(0, 310)
+  
+  p <- ggplot(p_dat, aes(x = year, y = value, color = species2)) +
+    geom_line(linewidth = 1) +
+    labs(x = "Year", y = "Value") +
+    coord_cartesian(ylim = c(0, NA)) +
+    facet_wrap(~variable2, scales = "free_y", ncol = 2, strip.position = "left") +  # Remove label_parsed
+     geom_blank(data=p_dat_dummy) + 
+    theme_classic() +
+    # ylab("Basal Area [m²/ha]") +
+    scale_color_manual(
+      name = "PFT", values = pft_cols)+
+    theme(
+    axis.title.y = element_blank(),
+    strip.placement = "outside",
+    strip.text.y.left = element_text(angle = 90),
+    strip.background = element_blank(),
+    legend.position = "bottom",
+    legend.key.size = unit(0.001, "mm"),
+    legend.key.width = unit(2, "line")
+    # legend.position.inside = c(0.9,0.2),
+    # legend.background = element_rect(color = "black", fill = NA)
+  )+
+    guides(color = guide_legend(ncol = 1,byrow = TRUE))
+    # ggtitle(paste0("patches = ",gsub("patches_", "", i)))
+  legend_p <- get_legend(p)
+  
+  # ggplot(p_dat[year > 500], aes(x = "sim", y = value, color = species2)) +
+  #   geom_boxplot()+
+  #   geom_jitter(data = obs_dt_year2, aes(x = "obs", y = value, color = species2))+
+  #   coord_cartesian(ylim = c(0, NA)) +
+  #   facet_wrap(species2~variable2, scales = "free_y", ncol = 6, strip.position = "top") +  # Remove label_parsed
+  #   geom_blank(data=p_dat_dummy) + 
+  #   theme_classic() +
+  #   # ylab("Basal Area [m²/ha]") +
+  #   scale_color_manual(
+  #     name = "PFT", values = pft_cols)+
+  # #   theme(
+  # #   axis.title.y = element_blank(),
+  # #   strip.placement = "outside",
+  # #   strip.text.y.left = element_text(angle = 90),
+  # #   strip.background = element_blank(),
+  # #   legend.position = "bottom",
+  # #   legend.key.size = unit(0.001, "mm"),
+  # #   legend.key.width = unit(2, "line")
+  # #   # legend.position.inside = c(0.9,0.2),
+  # #   # legend.background = element_rect(color = "black", fill = NA)
+  # # )+
+  #   guides(color = guide_legend(ncol = 1,byrow = TRUE))
+  
+  p_list[[i]] <- p#+theme(legend.position = "none")
+}
+
+grid.arrange(
+  grobs = c(
+    list(label_grob_f("a"), label_grob_f("b")),
+    list(p_list[[2]]
+      +geom_hline(data = avg_obs_dt2,aes(yintercept = value, color = species2), linetype = "solid", linewidth = 0.5)
+      +geom_hline(data = avg_obs_dt2_max,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5)
+      +geom_hline(data = avg_obs_dt2_min,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5)+theme(legend.position = "none"), 
+         p_list[[1]]
+      +geom_hline(data = avg_obs_dt2,aes(yintercept = value, color = species2), linetype = "solid", linewidth = 0.5)
+      +geom_hline(data = avg_obs_dt2_max,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5)
+      +geom_hline(data = avg_obs_dt2_min,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5)+theme(legend.position = "none")), list(legend_p)),
+  ncol = 2,
+  layout_matrix = rbind(c(1, 2), c(3, 4), c(5,5)),
+  heights = c(0.05, 0.90,0.2)
+)
+
+```
+
 ```{r}
 results_naive = data.table(read.csv("results/naive_succession.csv"))
 results_naive[variable=="ba.x"]$value = results_naive[variable=="ba.x"]$value
@@ -605,7 +835,7 @@ results_naive$variable
     strip.placement = "outside",
     strip.text.y.left = element_text(angle = 90),
     strip.background = element_blank(),
-    legend.position = "bottom",
+    legend.position = "right",
     legend.key.size = unit(0.001, "mm"),
     legend.key.width = unit(2, "line")
     # legend.position.inside = c(0.9,0.2),
@@ -616,7 +846,7 @@ results_naive$variable
   legend_p <- get_legend(p)
   
 
-  pdf("figures/figure_appendix_naive_succession.pdf", width = 5, height = 6 )
+  pdf("figures/figure_appendix_naive_succession.pdf", width = 7, height = 5 )
   p
   dev.off()
 
