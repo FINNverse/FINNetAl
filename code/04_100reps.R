@@ -69,6 +69,7 @@ log_mod_trans <- function(base = exp(1)) {
 # -----------------------------------------------------------
 # 2)  Beispielplot mit log_mod‐Skala, Original‑Labels
 # -----------------------------------------------------------
+library(ggplot2)
 ggplot(diffs_df, aes(y = par, x = diff)) +
   geom_boxplot() +
   labs(y = "Parameter", x = "Difference") +
@@ -78,7 +79,6 @@ ggplot(diffs_df, aes(y = par, x = diff)) +
   ) +
   theme_minimal()
 
-library(ggplot2)
 library(ggbeeswarm)
 library(gghalves)
 library(data.table)

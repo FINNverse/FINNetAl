@@ -710,6 +710,7 @@ patch_size = 0.1
 predictions = list()
 predictions[["pred_hybrid"]] = pred_hybrid
 predictions[["pred_process"]] = pred_process
+rmse_dt_all <- data.table()
 p_list = list()
 for(i in c("pred_hybrid","pred_process")){
   p_dat <- predictions[[i]]$long$site[, .(value = mean(value)), by = .(year = 1+(year-1)*5, species, variable)]
@@ -725,6 +726,10 @@ for(i in c("pred_hybrid","pred_process")){
   p_dat <- p_dat[!is.na(variable2)]
   p_dat[variable %in% c("ba", "trees"), value := value/patch_size,]
   
+  
+  rmse_dt <- merge(p_dat[year > 750], avg_obs_dt2, by = c("species2", "variable", "variable2"), suffixes = c(".sim",".obs"))
+  rmse_dt_all <- rbind(rmse_dt_all, data.table(rmse_dt, type = i))
+  
   p_dat_dummy = data.table::copy(p_dat)
   p_dat_dummy[variable == "dbh"][1:2]$value = c(0, 18)
   p_dat_dummy[variable == "ba"][1:2]$value = c(0, 40)
@@ -734,7 +739,7 @@ for(i in c("pred_hybrid","pred_process")){
   p_dat_dummy[variable == "r_mean_ha"][1:2]$value = c(0, 310)
   
   p <- ggplot(p_dat, aes(x = year, y = value, color = species2)) +
-    geom_line(linewidth = 1) +
+    geom_line(linewidth = 1, alpha = 0.5) +
     labs(x = "Year", y = "Value") +
     coord_cartesian(ylim = c(0, NA)) +
     facet_wrap(~variable2, scales = "free_y", ncol = 2, strip.position = "left") +  # Remove label_parsed
@@ -789,16 +794,26 @@ grid.arrange(
     list(label_grob_f("a"), label_grob_f("b")),
     list(p_list[[2]]
       +geom_hline(data = avg_obs_dt2,aes(yintercept = value, color = species2), linetype = "solid", linewidth = 0.5)
-      +geom_hline(data = avg_obs_dt2_max,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5)
-      +geom_hline(data = avg_obs_dt2_min,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5)+theme(legend.position = "none"), 
+      # +geom_hline(data = avg_obs_dt2_max,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5)
+      # +geom_hline(data = avg_obs_dt2_min,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5)
+      +theme(legend.position = "none")
+      ,
          p_list[[1]]
       +geom_hline(data = avg_obs_dt2,aes(yintercept = value, color = species2), linetype = "solid", linewidth = 0.5)
-      +geom_hline(data = avg_obs_dt2_max,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5)
-      +geom_hline(data = avg_obs_dt2_min,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5)+theme(legend.position = "none")), list(legend_p)),
+      # +geom_hline(data = avg_obs_dt2_max,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5)
+      # +geom_hline(data = avg_obs_dt2_min,aes(yintercept = value, color = species2), linetype = "dashed", linewidth = 0.5)
+      +theme(legend.position = "none")), list(legend_p))
+      ,
   ncol = 2,
   layout_matrix = rbind(c(1, 2), c(3, 4), c(5,5)),
   heights = c(0.05, 0.90,0.2)
 )
+
+rmse_dt_all2 <- rmse_dt_all[,.(
+  rmse = round(mean(sqrt((value.sim-value.obs)^2)),3)
+), by = .(species2, variable2, type)]
+
+dcast(rmse_dt_all2, variable2~type, value.var = "rmse", fun.aggregate = sum)
 
 ```
 
@@ -984,6 +999,176 @@ legend("topleft", bty = "n", col = pft_cols, lty = 1, lwd = 1.3, legend = names(
 axis(2, las = 1)
 axis(1, las = 1)
 
+
+```
+
+
+## Figure S12 - Recovery
+
+```{r}
+#| label: figure_S12
+#| fig-format: pdf
+#| fig-width: 10
+#| fig-height: 6
+#| echo: false
+#| silent: true
+#| message: false
+#| warning: false
+#| fig-cap: "Parameter recovery from 1000 replicate simulations and refits of the full model using five‑fold spatial cross‑validation. Blue half‑violin/half‑box plots show the distribution of estimation errors (posterior mean of the fitted parameter minus its true value). a) Process‑level parameters: errors grouped by ecological process (competition, growth, mortality, regeneration) and shown for the corresponding process parameters (e.g., compHeight, growthLight, mortSize). b) Environmental parameter estimates: errors for the weights associated with the intercept and six climatic covariates (Prec, SR_kW_m2, RH_prc, T_max, T_min, swp) within each process. Because the neural‑network component consists of a single linear layer, these weights are equivalent to classical multivariate linear‑regression coefficients. The red horizontal line indicates perfect recovery (error = 0)."
+
+models = list.files("results/03_full100reps/", full.names = T, recursive = T)
+m_true = torch::torch_load("results/01_full/pft-period7-25patches_full.pt")
+m_list = sapply(models, torch::torch_load)
+m_pars = lapply(m_list, function(x) x$parameters_r)
+
+i = names(m_true$parameters_r)[1]
+m_true$nn_growth$parameters
+
+diffs_df = data.frame()
+par_names = c("par_competition_r", "par_growth_r", "par_mortality_r", "par_regeneration_r")
+for(i in par_names){
+  for(c in 1:ncol(m_true[[i]])){
+    for(m in m_list[1:length(m_list)]){
+      diffs_df = rbind(
+        diffs_df,
+        data.frame(
+          true = m_true[[i]][,c],
+          recov = m[[i]][,c],
+          diff = m_true[[i]][,c] - m[[i]][,c], 
+          par = paste0(i,c)
+          )
+        )
+    }
+  }
+}
+
+par_names_nn = c("nn_mortality.0.weight", "nn_growth.0.weight", "nn_regeneration.0.weight")
+for(i in par_names_nn){
+  for(c in 1:ncol(m_true$parameters_r[[i]])){
+    for(m in m_list[1:length(m_list)]){
+      diffs_df = rbind(
+        diffs_df,
+        data.frame(
+          true = m_true$parameters_r[[i]][,c], 
+          recov = m$parameters_r[[i]][,c],
+          diff = m_true$parameters_r[[i]][,c] - m$parameters_r[[i]][,c], 
+          par = paste0(i,c))
+      )
+    }
+  }
+}
+
+log_mod <- function(x, base = exp(1)) {
+  # Vorzeichenmatrix (0 bekommt hier schon das richtige Vorzeichen = 0)
+  sgn <- sign(x)
+  # Logarithmus von (|x| + 1); bei x = 0 ergibt das log(1) = 0
+  log_part <- log(abs(x) + 1, base = base)
+  # Kombination von Vorzeichen und Betrag
+  result <- sgn * log_part
+  # Nur zur Sicherheit: stellt sicher, dass exakt x == 0 auch exakt 0 ergibt
+  result[x == 0] <- 0
+  return(result)
+}
+log_mod(-10:10)
+par(mfrow = c(1,1), mar = c(3,8,1,1))
+boxplot(log_mod(diff) ~ par, data = diffs_df, horizontal = T, las = 1, cex.axis = 0.7)
+abline(v = 0)
+
+# create transformation for log modulu
+library(scales) 
+# -----------------------------------------------------------
+# 1)  Transformation definieren
+# -----------------------------------------------------------
+log_mod_trans <- function(base = exp(1)) {
+  trans_new(
+    name      = paste0("log_mod-", format(base)),
+    transform = function(x) sign(x) * log(abs(x) + 1, base = base),
+    inverse   = function(y) sign(y) * (base^abs(y) - 1),
+    breaks    = pretty_breaks(),      # Tick‑Positionen auf Originalskala
+    domain    = c(-Inf, Inf)
+  )
+}
+
+# # -----------------------------------------------------------
+# # 2)  Beispielplot mit log_mod‐Skala, Original‑Labels
+# # -----------------------------------------------------------
+# ggplot(diffs_df, aes(y = par, x = diff)) +
+#   geom_boxplot() +
+#   labs(y = "Parameter", x = "Difference") +
+#   scale_x_continuous(
+#     trans  = log_mod_trans(),           # ← hier anwenden
+#     breaks = pretty_breaks(n = 7)       # (optional) schönere Tick‑Abstände
+#   ) +
+#   theme_minimal()
+
+diffs_dt <- data.table(diffs_df)
+diffs_dt[grepl("competition",par),process := "competition",]
+diffs_dt[grepl("competition_r1",par),name := "compHeight",]
+diffs_dt[grepl("competition_r2",par),name := "compStr",]
+diffs_dt[grepl("growth",par),process := "growth",]
+# diffs_dt[grepl("nn_growth.0.weight1",par),process := "growth",]
+# diffs_dt[grepl("nn_growth.0.weight1",par),name := "intercept",]
+diffs_dt[grepl("growth_r1",par),name := "growthLight",]
+diffs_dt[grepl("growth_r2",par),name := "growthSize",]
+diffs_dt[grepl("mortality",par),process := "mortality",]
+# diffs_dt[grepl("nn_mortality.0.weight1",par),process := "mortality",]
+# diffs_dt[grepl("nn_mortality.0.weight1",par),name := "intercept",]
+diffs_dt[grepl("mortality_r1",par),name := "mortLight",]
+diffs_dt[grepl("mortality_r2",par),name := "mortSize",]
+diffs_dt[grepl("mortality_r3",par),name := "mortGrowth",]
+diffs_dt[grepl("regeneration",par),process := "regeneration",]
+diffs_dt[grepl("regeneration_r1",par),name := "regLight",]
+# diffs_dt[grepl("nn_regeneration.0.weight1",par),process := "regeneration",]
+# diffs_dt[grepl("nn_regeneration.0.weight1",par),name := "intercept",]
+# diffs_dt[grepl("par",par) | grepl("weight1", par),type := "process parameter",]
+# diffs_dt[grepl("nn_",par) & !grepl("weight1", par),type := "environment parameter",]
+diffs_dt[grepl("par",par),type := "process parameter",]
+diffs_dt[grepl("nn_",par),type := "environment parameter",]
+
+diffs_dt[type == "environment parameter",name := gsub("weight","",tstrsplit(par, ".", fixed = T)[[3]]),]
+
+# make "intercept" allways the first
+diffs_dt[,name := factor(name, levels = c("intercept", unique(diffs_dt[name != "intercept"]$name))),]
+
+p_proc <- ggplot(diffs_dt[type == "process parameter"], aes(x = name, y = diff)) +
+  geom_hline(yintercept = 0, color = "red") +
+  geom_quasirandom(alpha = 0.1, method = "pseudorandom", color = "#A8C4E0")+
+  # geom_violin(fill = NA, color = "black", scale = "width")+
+  facet_wrap(~process, ncol = 2, scales = "free") +
+  labs(x = "Parameter", y = "Difference")+
+  theme_classic()+
+  geom_boxplot(width = 0.2, outlier.shape = NA)+
+  theme(axis.title.x = element_blank())
+
+fac_levels = c("intercept","Prec","SR_kW_m2","RH_prc","T_max","T_min","swp")
+
+p_env <- ggplot(diffs_dt[type == "environment parameter"], 
+       aes(x = factor(name, levels = 1:7, labels = fac_levels), y = diff)
+       ) +
+  # see::geom_violinhalf(scale = "width", flip = T)+
+  geom_hline(yintercept = 0, color = "red") +
+  geom_quasirandom(alpha = 0.1, method = "pseudorandom", color = "#A8C4E0")+
+  # geom_violin(fill = NA, color = "black", scale = "width")+
+  facet_wrap(~process, ncol = 1, scales = "free") +
+  labs(x = "Parameter", y = "Difference")+
+  theme_classic()+
+  geom_boxplot(width = 0.2, outlier.shape = NA)+
+  theme(axis.title.x = element_blank())
+
+
+gridExtra::grid.arrange(
+  grobs = list(
+    label_grob_f("a"), label_grob_f("b"),
+    p_proc, p_env
+  ), 
+  layout_matrix = rbind(
+    c(1,2),
+    c(3,4)
+  ),
+  # include letters to each plot
+  widths = c(0.6,0.6), 
+  heights = c(0.05,0.95)
+)
 
 ```
 
@@ -1614,6 +1799,10 @@ axis(1, las = 1)
 <!-- # ) -->
 
 <!-- ``` -->
+
+
+
+
 
 <!-- ### Spatial holdout -->
 <!-- ```{r} -->
