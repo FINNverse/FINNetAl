@@ -197,7 +197,7 @@ comb_dt[, var := tstrsplit(variable,"\\.")[[1]],]
 comb_dt[, simpred := tstrsplit(variable,"\\.")[[2]],]
 
 comb_dt_allspecies <- rbind(
-  comb_dt[var %in% c("ba", "trees"), .(value = sum(value)), by = .(year,k,var,simpred)],
+  comb_dt[var %in% c("ba", "trees"), .(value = sum(value)/0.1), by = .(year,k,var,simpred)],
   comb_dt[var %in% c("dbh", "growth", "mort", "reg"), .(value = mean(value)), by = .(year,k,var,simpred)]
   )
 comb_dt_allspecies$species = "all"
@@ -205,7 +205,10 @@ comb_dt_allspecies$species = "all"
 comb_dt <- rbind(comb_dt[,-"variable"], comb_dt_allspecies)
 
 comb_dt <- dcast(comb_dt, species + year + k + var ~ simpred, value.var = "value")
-cors_dt <- comb_dt[,.(r = cor(pred,true)), by = .(var, species, k)]
+cors_dt <- comb_dt[,.(
+  r = cor(pred,true),
+  rmse = sqrt(mean((pred-true)^2))
+  ), by = .(var, species, k)]
 
 library(ggplot2)
 ggplot(cors_dt[k != 0], aes(x = factor(species), y = r))+
