@@ -11,6 +11,8 @@ gc()
 all_models <- c(
   list.files("results/02_realdata", full.names = T, recursive = T),
   list.files("results/02_realdata_hybridTF0", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridTF0_26-04-16_0.2", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridTF0_26-04-16_0.4", full.names = T, recursive = T),
   list.files("results/02_realdata_hybridTF1", full.names = T, recursive = T),
   list.files("results/02_realdata_hybrid_mortTF0", full.names = T, recursive = T),
   list.files("results/02_realdata_hybrid_mortTF1", full.names = T, recursive = T),
@@ -20,7 +22,8 @@ all_models <- c(
   list.files("results/02_realdata_hybridSmallDropoutfixed", full.names = T, recursive = T),
   list.files("results/02_realdata_hybridMedium", full.names = T, recursive = T),
   list.files("results/02_realdata_hybridMediumDropout", full.names = T, recursive = T),
-  list.files("results/02_realdata_hybridMediumDropoutfixed", full.names = T, recursive = T)
+  list.files("results/02_realdata_hybridMediumDropoutfixed", full.names = T, recursive = T),
+  list.files("results/02_simulated", full.names = T, recursive = T)
 )
 
 overwrite = F
@@ -40,8 +43,8 @@ if(overwrite){
 
   # all_models <- c(paste0("results/02_realdata/",gsub(".pt","",unique(basename(all_models))),"_ba.trees.dbh.growth.mort.reg.pt"), all_models)
 }
-all_models <- all_models[grepl("period7-25patches", all_models)]
-
+# all_models <- all_models[grepl("period7-25patches", all_models)]
+# i = all_models[1]
 for(i in all_models){
   cat("\n", which(i == all_models), "of", length(all_models),"\nstarting", i, "\n")
   pred_dt = build_model_dt(i)
@@ -226,7 +229,7 @@ for(i in 1:length(cors_list)){
   print(p)
   p=ggplot(dt[hybrid != "nohybrid"], aes(x = cv, y = variable))+
     geom_tile(aes(fill = spearmans_r))+
-    facet_grid(scale~test_train+paste0(hybrid_process,"_TF",as.integer(transformer=="yes")))+
+    facet_grid(scale~test_train+paste0(hybrid))+
     theme_classic()+
     theme(
       strip.text.y = element_text(angle = 0),
@@ -271,7 +274,7 @@ exmple_models <- all_models[grepl("pft-period7-25patches_S0_T0", all_models)]
 pred_nohybrid = build_model_dt(exmple_models[1])[[1]][test_train == "train"]
 pred_growthTF0 = build_model_dt(exmple_models[2])[[1]][test_train == "train"]
 pred_growthTF1 = build_model_dt(exmple_models[3])[[1]][test_train == "train"]
-pred_growthTF1fixed = build_model_dt(gsub("results/02_realdata_hybridTF1","results/02_realdata_hybridTF1fixed",exmple_models[3]))[[1]][test_train == "train"]
+# pred_growthTF1fixed = build_model_dt(gsub("results/02_realdata_hybridTF1","results/02_realdata_hybridTF1fixed",exmple_models[3]))[[1]][test_train == "train"]
 
 build_model_dt(exmple_models[1])
 models = lapply(exmple_models, function(x) {
@@ -302,8 +305,8 @@ p2
 p1 = ggplot(rbindlist(list(
   data.table(pred_nohybrid, hybrid = "nohybrid"),
   data.table(pred_growthTF0, hybrid = "growthTF0"),
-  data.table(pred_growthTF1, hybrid = "growthTF1"),
-  data.table(pred_growthTF1fixed, hybrid = "growthTF1fixed")
+  data.table(pred_growthTF1, hybrid = "growthTF1")
+  # data.table(pred_growthTF1fixed, hybrid = "growthTF1fixed")
 ), fill = T), aes(x = dbh.pred, y = growth.pred))+
   geom_point()+
   geom_smooth()+
@@ -367,3 +370,4 @@ ggplot(pdt1, aes(y = spearmans_r, x = variable, fill = simreal))+
     strip.text.y = element_text(angle = 0),
     strip.background = element_blank()
   )
+
