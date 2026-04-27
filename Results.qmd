@@ -32,6 +32,7 @@ library(gghalves)
 library(data.table)
 library(tidyverse)
 
+FINN::FINN.seed(1)
 
 pft_cols <- c(
   Slow                         = "#BF7DA5",  # pink-mauve
@@ -177,7 +178,7 @@ lines_gam <- function(x, y,
 chosen_scale = "pft-period7-25patches"
 fitted_models <- c(
     list.files("results/02_realdata/", full.names = T, recursive = T, pattern = chosen_scale),
-    list.files("results/02_realdata_hybridTF0/", full.names = T, recursive = T, pattern = chosen_scale)
+    list.files("results/02_realdata_hybridTF0_26-04-16_0.4/", full.names = T, recursive = T, pattern = chosen_scale)
     # list.files("results/02_realdata_hybridSmall/", full.names = T, recursive = T, pattern = chosen_scale)
 )
 fitted_models <- fitted_models[grepl("S0_T0",fitted_models)]
@@ -197,7 +198,7 @@ fitted_models <- fitted_models[grepl("S0_T0",fitted_models)]
 #| silent: true
 #| message: false
 #| warning: false
-#| fig-cap: "Hybrid-FINN recovers the functional form of a process and improves predictive performance. To test whether Hybrid-FINN can recover the functional form of a process, we simulated data from a Process-FINN model (M1), in which the functional form of the growth process includes an environmental unimodal niche curve (quadratic effect of the environment). Then, we tested two models: M3, a Hybrid-FINN in which growth was replaced by a deep neural network; and M2, a misspecified Process-FINN model with an assumed linear relationship between environment and growth. (a) compares  the calibrated growth-environment relationships of models M2 and M3 to the true model M1. (b) compares the predictive performance of models M2 and M3 with the observed data, measured by the Spearman correlation factor. Correlations are based on equilibrium simulations and represent the relation for each variable and site over 500 simulated timesteps."
+#| fig-cap: "Hybrid-FINN recovers the functional form of a process and improves predictive performance. To test whether Hybrid-FINN can recover the functional form of a process, we simulated data from a Process-FINN model (M1), in which the functional form of the growth process includes an environmental unimodal niche curve (quadratic effect of the environment). Then, we tested two models: M3, a Hybrid-FINN in which growth was replaced by a deep neural network; and M2, a misspecified Process-FINN model with an assumed linear relationship between environment and growth. (a) compares the calibrated growth-environment relationships of models M2 and M3 to the true model M1. (b) compares the predictive performance of models M2 and M3 with the observed data, measured by Spearman rank correlation. Correlations are based on equilibrium simulations and represent the relation for each variable and site over 500 simulated timesteps."
 
 load("results/functional_form.RData")
 formula = y ~ s(x,bs="cr",  k= 5)
@@ -356,7 +357,7 @@ for(i_hybrid_model in fitted_models_fig4[grepl("hybrid",fitted_models_fig4)]){
 #| silent: true
 #| message: false
 #| warning: false
-#| fig-cap: "Spearman correlation of observed and simulated variables for five PFTs from the five-fold blocked spatial cross-validation of all models calibrated/trained on the BCI data. 'Process' refers to Process-FINN as a full process model with fixed functional forms, 'Hybrid' refers to Hybrid-FINN in which the growth process is replaced by a DNN, 'Naïve NN' refers to a single DNN that was trained on the response variables for each time step. The naïve NN received the derived response variables of each previous time step as well as the current environment as input. PFTs are according to Rüger et al. (2020)"
+#| fig-cap: "Spearman correlation of observed and simulated variables for five PFTs from the five-fold blocked spatial cross-validation of all models calibrated/trained on the BCI data. 'Process' refers to Process-FINN as a full process model with fixed functional forms, 'Hybrid' refers to Hybrid-FINN in which the growth process is replaced by a DNN, 'Naïve NN' refers to a single DNN that was trained on the response variables for each time step. The naïve NN received the derived response variables of each previous time step as well as the current environment as input. PFTs are according to (Rüger et al., 2020)."
 
 cors_naive = fread("results/cors_naive.csv")
 
@@ -431,7 +432,7 @@ dcast(rmse_pdat[species2 != "all" & test_train == "test"], variable2~type2+test_
 #| silent: true
 #| message: false
 #| warning: false
-#| fig-cap: "Simulated successional trajectories of stand characteristics and demographic rates of five PFTs for Process-FINN (a) and Hybrid-FINN (b), where the growth process is replaced by a DNN. Note that rates are not annual and represent changes of five year intervals. Both models were trained with the BCI forest data with 7 censuses. Forest dynamics were simulated for 600 years. Disturbance regime of Rüger et al. (2020) was used."
+#| fig-cap: "Simulated successional trajectories of stand characteristics and demographic rates of five PFTs for Process-FINN (a) and Hybrid-FINN (b), where the growth process is replaced by a DNN. Straight horizontal lines represent the average observed values from the original BCI forest inventory data. Note that rates are not annual and represent changes of five-year intervals. Both models were trained with the BCI forest data with 7 censuses. Forest dynamics were simulated for 1200 years. Disturbance regime of Rüger et al. (2020) was used."
 
 obs_dt <- fread("data/BCI/noSplits/pft-period7-25patches/obs_dt.csv")
 
@@ -677,9 +678,14 @@ results_naive <- merge(results_naive[,-"value"], unique(rmse_dt_all[,.(variable2
 
 rmse_dt_all2 <- rbind(data.table(results_naive[cv != "S0T0"], type = "naive"), rmse_dt_all, use.names = T, fill = T)
 
-rmse_dt_all3 <- rmse_dt_all2[test_train == "test" | is.na(test_train),.(
+ggplot(rmse_dt_all2[variable == "mort"], aes(x = year, color = species2))+
+  geom_line(aes(y = value.sim, linetype = "sim"))+
+  geom_line(aes(y = value.obs, linetype = "obs"))+
+  facet_wrap(~type)
+
+rmse_dt_all3 <- rmse_dt_all2[(test_train == "test" | is.na(test_train)),.(
   rmse = round(mean(sqrt((value.sim-value.obs)^2), na.rm=T),3)
-), by = .(species2, variable2, type, k)]
+), by = .(species2, variable2, type)]
 
 dcast(rmse_dt_all3, variable2~type, value.var = "rmse", fun.aggregate = mean)
 
