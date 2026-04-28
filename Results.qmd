@@ -178,7 +178,7 @@ lines_gam <- function(x, y,
 chosen_scale = "pft-period7-25patches"
 fitted_models <- c(
     list.files("results/02_realdata/", full.names = T, recursive = T, pattern = chosen_scale),
-    list.files("results/02_realdata_hybridTF0_26-04-16_0.4/", full.names = T, recursive = T, pattern = chosen_scale)
+    list.files("results/02_realdata_hybridTF0dropout0.1/", full.names = T, recursive = T, pattern = chosen_scale)
     # list.files("results/02_realdata_hybridSmall/", full.names = T, recursive = T, pattern = chosen_scale)
 )
 fitted_models <- fitted_models[grepl("S0_T0",fitted_models)]
