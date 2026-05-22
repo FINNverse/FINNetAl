@@ -11,8 +11,9 @@ gc()
 all_models <- c(
   list.files("results/02_realdata", full.names = T, recursive = T),
   list.files("results/02_realdata_hybridTF0", full.names = T, recursive = T),
-  list.files("results/02_realdata_hybridTF0_26-04-16_0.2", full.names = T, recursive = T),
-  list.files("results/02_realdata_hybridTF0_26-04-16_0.4", full.names = T, recursive = T),
+  # list.files("results/02_realdata_hybridTF0_26-04-16_0.1", full.names = T, recursive = T),
+  list.files("results/02_realdata_hybridTF0dropout0.1", full.names = T, recursive = T),
+  # list.files("results/02_realdata_hybridTF0_26-04-27", full.names = T, recursive = T),
   list.files("results/02_realdata_hybridTF1", full.names = T, recursive = T),
   list.files("results/02_realdata_hybrid_mortTF0", full.names = T, recursive = T),
   list.files("results/02_realdata_hybrid_mortTF1", full.names = T, recursive = T),
