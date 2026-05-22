@@ -309,12 +309,12 @@ for(i_hybrid_model in fitted_models_fig4[grepl("hybrid",fitted_models_fig4)]){
     expression(mortality~(m^3~ha^-1~yr^-1))
   )
   var_labels2 <- c(
-    "basal~area~(m^2~ha^-1)",
-    "trees~(ha^-1)",
-    "dbh~(cm)",
-    "regeneration~(ha^-5)",
-    "growth~('%'~yr^-1)",
-    "mortality~('%'~yr^-1)"
+    "Basal Area [m²/ha]",
+    "Trees [N/ha]",
+    "avg. DBH [cm]",
+    "Regeneration [N/ha]",
+    "Growth [%/100]",
+    "Mortality [%/100]"
   )
   p_dat2[,variable2 := factor(
     variable, 
@@ -362,7 +362,7 @@ names(cors_naive)[names(cors_naive) == "var"] <- "variable"
 cors_naive$type2 = "Naive DNN"
 var_labels3 = c("Basal Area [m²/ha]",
                 "Trees [N/ha]",
-                "DBH [cm]",
+                "avg. DBH [cm]",
                 "Regeneration [N/ha]",
                 "Growth [%/100]",
                 "Mortality [%/100]")
@@ -377,7 +377,7 @@ all_cors2 <- rbind(all_cors, cors_naive, fill = T)
 
 var_labels3 = c("Basal Area [m²/ha]",
                 "Trees [N/ha]",
-                "DBH [cm]",
+                "avg. DBH [cm]",
                 "Regeneration [N/ha]",
                 "Growth [%/100]",
                 "Mortality [%/100]")
@@ -884,8 +884,8 @@ p_dat2 <- rbind(p_dat2, naive_obs)
 ## --- Shared formatting ---
 vars <- c("ba", "trees", "dbh", "reg", "growth", "mort")
 var_labels2 <- c(
-  "basal~area~(m^2~ha^-1)", "trees~(ha^-1)", "dbh~(cm)",
-  "regeneration~(ha^-5)", "growth~('%'~yr^-1)", "mortality~('%'~yr^-1)"
+  "Basal Area [m²/ha]", "Trees [N/ha]", "avg. DBH [cm]",
+  "Regeneration [N/ha]", "Growth [%/100]", "Mortality [%/100]"
 )
 
 p_dat2[, variable2 := factor(variable, levels = vars, labels = var_labels2)]
@@ -953,7 +953,7 @@ make_panel <- function(j_type, title) {
     scale_shape_manual(values = c(4, 1)) +
     scale_linetype_manual(values = c("solid", "dashed")) +
     facet_wrap(~ variable2, scales = "free_y", ncol = 1,
-               strip.position = "left", labeller = label_parsed) +
+               strip.position = "left") +
     scale_color_manual(name = "PFT", values = c(pft_cols, all = "black")) +
     theme_classic() +
     labs(x = "Inventory Period", y = NULL, title = title) +
@@ -1117,7 +1117,7 @@ grid.arrange(grobs = list(
 #| silent: true
 #| message: false
 #| warning: false
-#| fig-cap: "Estimated process-level parameters of Process-FINN (red) and Hybrid-FINN (blue) calibrated on the BCI forest inventory data, grouped by demographic process (competition, growth, mortality, regeneration) and shown for each of the five plant functional types. These are the mechanistic parameters of the model's process equations: competition (compHeight, compStr), growth (growthLight, growthSize), mortality (mortLight, mortSize, mortGrowth), and regeneration (regLight). Because Hybrid-FINN replaces the growth process with a DNN, it has no mechanistic growth parameters; the growth panels therefore show estimates for Process-FINN only. The parameters of the environmental-response functions are not shown here; they are reported separately in Figure A5."
+#| fig-cap: "Estimated process-level parameters of Process-FINN (blue) and Hybrid-FINN (red) calibrated on the BCI forest inventory data, grouped by demographic process (competition, growth, mortality, regeneration) and shown for each of the five plant functional types. These are the mechanistic parameters of the model's process equations: competition (compHeight, compStr), growth (growthLight, growthSize), mortality (mortLight, mortSize, mortGrowth), and regeneration (regLight). Because Hybrid-FINN replaces the growth process with a DNN, it has no mechanistic growth parameters; the growth panels therefore show estimates for Process-FINN only. The parameters of the environmental-response functions are not shown here; they are reported separately in Figure A5."
 
 models_process = list.files("results/02_realdata/", full.names = T, recursive = T, pattern = "pft-period7-25patches_S0_T0")
 models_hybrid = list.files("results/02_realdata_hybridTF0dropout0.1/", full.names = T, recursive = T, pattern = "pft-period7-25patches_S0_T0")
@@ -1273,7 +1273,7 @@ grid.arrange(
 #| silent: true
 #| message: false
 #| warning: false
-#| fig-cap: "Estimated parameters of environmental responses of process-FINN and hybrid-FINN calibrated on the BCI forest inventory data."
+#| fig-cap: "Estimated environmental-response coefficients of Process-FINN (blue) and Hybrid-FINN (red) calibrated on the BCI forest inventory data, shown for the growth and mortality processes and for each of the five plant functional types. Each environmental-response function maps the intercept and six climatic covariates (Prec, SR_kW_m2, RH_prc, T_max, T_min, swp) to a scaled effect on the corresponding demographic rate; the coefficients are therefore distinct from, and complementary to, the mechanistic process parameters shown in Figure A4. Because Hybrid-FINN replaces the growth process with a DNN, it has no growth environmental-response coefficients; the growth panels therefore show estimates for Process-FINN only."
 
 p_env+theme(legend.position = "bottom", axis.title.y = element_blank(), legend.title = element_blank())
 
