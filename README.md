@@ -31,7 +31,6 @@ Prepare data (from raw BCI data):
 
 ``` r
 source("code/data_preparation/01-bci-data-preparation.R")
-source("code/data_preparation/01-uholka-data-preparation.R")
 source("code/data_preparation/01b-bci-secundary-forest-preparation.R")
 source("code/data_preparation/02-spatial-holdout-folds-bci.R")
 ```

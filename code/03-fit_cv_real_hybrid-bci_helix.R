@@ -194,7 +194,7 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
       return(g)
     }
     m1$growth_func = m1$.__enclos_env__$private$set_environment(gh)
-    source("code/99_cohort500fix2.R")
+    source("code/99_cohort500fix.R")
     m1$fit(data = obs_dt, batchsize = batchsize, env = env_dt, init_cohort = cohort1,  epochs = Nepochs, patches = Npatches, lr = 0.01, checkpoints = Inf,
            optimizer = torch::optim_ignite_adam, device = "gpu", record_gradients = FALSE,weights = c(0.1, 10, 1.0, 10.0, 1, 1), plot_progress = FALSE,
            loss= c(dbh = "mse", ba = "mse", trees = "nbinom", growth = "mse", mortality = "mse", regeneration = "nbinom")

@@ -13,12 +13,8 @@ hybrid_transformer = nn_module("hybrid_transformer",
                                  self$emb_dim = emb_dim
                                  self$num_species = num_species
                                  self$species_embedder = nn_embedding(num_embeddings=num_species, embedding_dim=species_embd)
-                                 self$dgtl_embedder = nn_sequential(nn_linear(dgtl_embedder_dim, 50L),
-                                                                    #nn_dropout(dropout),
-                                                                    nn_linear(50L, emb_dim-species_embd))
-                                 self$env_embedder = nn_sequential(nn_linear(num_env_vars, 50L),
-                                                                   #nn_dropout(dropout),
-                                                                   nn_linear(50L, emb_dim))
+                                 self$dgtl_embedder = nn_sequential(nn_linear(dgtl_embedder_dim, emb_dim-species_embd))
+                                 self$env_embedder = nn_sequential(nn_linear(num_env_vars, emb_dim))
                                  self$positional_encoding = FINN:::PositionalEncoding(emb_dim, dropout, max_len = 10000L)
                                  encoder_layer = FINN:::TransformerEncoderLayer(d_model=emb_dim, nhead=num_heads,batch_first = TRUE, dim_feedforward = dim_feedforward)
                                  self$transformer_encoder = FINN:::TransformerEncoder(encoder_layer, num_layers=num_layers)
@@ -26,7 +22,7 @@ hybrid_transformer = nn_module("hybrid_transformer",
                                                              nn_gelu(),
                                                              #nn_dropout(dropout),
                                                              nn_linear(100, 1L))
-
+                                 
                                },
                                forward = function(dbh, growth = NULL, trees, light, species, env) {
                                  orig_shape1 = dbh$shape[1:2]
@@ -62,6 +58,7 @@ hybrid_transformer = nn_module("hybrid_transformer",
                                  src_key_padding_mask = trees$view(c(-1L, orig_shape2))$lt(0.5)
                                  env_mask = torch_zeros(embeddings$shape[1], 1, dtype=torch_bool(), device=embeddings$device)
                                  key_padding_mask = torch_cat(list(env_mask, src_key_padding_mask), dim=2)
+                                 
                                  transformer_output = self$transformer_encoder(embeddings, src_key_padding_mask=key_padding_mask)
                                  pred = self$output(transformer_output[,2:(orig_shape2+1),])$squeeze(3L)
                                  return(pred$view(c(orig_shape1, orig_shape2)))
@@ -69,3 +66,61 @@ hybrid_transformer = nn_module("hybrid_transformer",
 )
 
 assignInNamespace("hybrid_transformer", hybrid_transformer, ns = "FINN")
+
+
+
+
+hybrid_DNN = nn_module("hybrid_DNN",
+                       initialize = function(num_species = 5L,
+                                             num_env_vars =7L,
+                                             emb_dim=2L,
+                                             dropout=0.1,
+                                             hidden = c(50L, 50L),
+                                             ...
+                       ) {
+                         self$species_embedder = nn_embedding(num_species, emb_dim)
+                         
+                         layers = list()
+                         layers[[1]] = nn_linear(num_env_vars+3L+emb_dim-1, hidden[1])
+                         counter = 2L
+                         for(i in 2:length(hidden)) {
+                           layers[[counter]] = nn_selu()
+                           counter = counter + 1
+                           layers[[counter]] = nn_dropout(dropout)
+                           counter = counter + 1
+                           layers[[counter]] = nn_linear(hidden[i-1], hidden[i])
+                           counter = counter + 1
+                         }
+                         layers[[counter]] = nn_selu()
+                         layers[[counter+1]] = nn_dropout(dropout)
+                         layers[[counter+2]] = nn_linear(hidden[length(hidden)], 1L)
+                         self$nn = do.call(nn_sequential, layers)
+                         
+                       },
+                       forward = function(dbh, growth = NULL, trees = NULL, light, species, env) {
+                         if(is.null(growth)) {
+                           input =
+                             torch::torch_cat(
+                               list(dbh$unsqueeze(4L) /100., # rescale dbh wird das noch benoetigt?
+                                    env$unsqueeze(2L)$unsqueeze(2L)$`repeat`(c(1L, dbh$shape[2], dbh$shape[3], 1L)),
+                                    light$unsqueeze(4L)),
+                               dim = 4L)
+                         } else {
+                           input =
+                             torch::torch_cat(
+                               list((dbh$unsqueeze(4L)+1)$log(), # rescale dbh wird das noch benoetigt?
+                                    growth$unsqueeze(4L),
+                                    (trees$unsqueeze(4L)+1.0)$log(),
+                                    env$unsqueeze(2L)$unsqueeze(2L)$`repeat`(c(1L, dbh$shape[2], dbh$shape[3], 1L)),
+                                    light$unsqueeze(4L)),
+                               dim = 4L)
+                         }
+                         
+                         species_embeddings = self$species_embedder(species) # [sites, patches, cohorts, species_embeddings]
+                         input_together = torch::torch_cat(list(input, species_embeddings), dim = 4L)
+                         predictions = self$nn(input_together) # [sites, patches, cohorts, 1]
+                         return(predictions[,,,1])
+                       }
+                       
+)
+assignInNamespace("hybrid_DNN", hybrid_DNN, ns = "FINN")

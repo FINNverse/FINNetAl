@@ -207,7 +207,7 @@ gh = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug 
 }
 
 m3env$growth_func = m3env$.__enclos_env__$private$set_environment(gh)
-source("code/99_cohort500fix2.R")
+source("code/99_cohort500fix.R")
 
 
 ##  simulate from M1 ####
