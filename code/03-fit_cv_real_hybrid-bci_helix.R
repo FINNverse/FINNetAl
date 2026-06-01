@@ -7,16 +7,16 @@ library(torch)
 library(glmmTMB)
 library(parallel)
 
-Nepochs = 8000
-overwrite = F
+Nepochs = 8000L
+overwrite = T
 lossvars_comb = "ba.trees.dbh.growth.mort.reg"
 all_lossvars = c("ba", "trees", "dbh", "growth", "mort", "reg")
 
 # T_folds <- paste0("T",c(0, 1:2))
-# S_folds <- paste0("S", c(0, 1:5))
+S_folds <- paste0("S", c(0, 1:5))
 T_folds <- paste0("T",c(0))
-S_folds <- paste0("S", c(0))
-transformer_folds = c("Small","SmallDropout","Medium","MediumDropout" )
+#S_folds <- paste0("S", c(0))
+transformer_folds = c("TF0")
 
 fold_names = expand.grid(list(S_folds,T_folds,transformer_folds))
 fold_names = paste0(fold_names$Var1, "_", fold_names$Var2, "_", fold_names$Var3)
@@ -38,7 +38,7 @@ for(i_dir in directories){
 
 # Process only the subset for this batch
 
-cl = parallel::makeCluster(4L)
+cl = parallel::makeCluster(6L)
 nodes = unlist(parallel::clusterEvalQ(cl, paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')))
 parallel::clusterExport(cl, varlist = ls(envir = .GlobalEnv))
 parallel::clusterEvalQ(cl, {
@@ -65,27 +65,27 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
   tf = tstrsplit(i_cv, "_", fixed = TRUE)[[3]][1]
   response = tstrsplit(i_cv, "_", fixed = TRUE)[[4]][1]
   obsNA = unlist(strsplit(response, ".", fixed = TRUE))
-
+  
   i_name = basename(i_dir)
-  out_dir = paste0("results/","02_realdata_hybrid",tf,"/",i_name,"_",cv_S,"_",cv_T,".pt")
+  out_dir = paste0("results/","02_realdata_hybrid",tf,"_26-04-17/",i_name,"_",cv_S,"_",cv_T,".pt")
   stopifnot(length(overwrite) > 0)
   stopifnot(length(all_lossvars) > 0)
   stopifnot(sum(all_lossvars %in% obsNA) > 0)
   if(!file.exists(out_dir) | overwrite){
-
+    
     # cat(paste("Starting", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
-
+    
     myself = paste(Sys.info()[['nodename']], Sys.getpid(), sep='-')
     dist = cbind(nodes,0:3)
     dev = as.integer(as.numeric(dist[which(dist[,1] %in% myself, arr.ind = TRUE), 2]))
-
+    
     Sys.setenv(CUDA_VISIBLE_DEVICES=dev)
-
+    
     cat("\nread data:", i_name)
     cat("\nCV variant:", i_cv)
     env_dt = fread(paste0(i_dir,"/env_dt_",cv_S,"_",cv_T,"_train.csv"))
     env_dt = env_dt[,.(siteID, year, Prec, SR_kW_m2, RH_prc, T_max, T_min, swp )]
-
+    
     obs_dt = fread(paste0(i_dir,"/obs_dt_",cv_S,"_",cv_T,"_train.csv"))
     # only pick columns siteID species  year   dbh    ba trees growth  mort   reg r_mean_ha
     obs_dt = obs_dt[,.(siteID, species, year, dbh, ba, trees, growth, mort, reg)]
@@ -93,32 +93,32 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
     obs_dt[dbh == 0, mort := NA_real_]
     obs_dt[dbh == 0, growth := NA_real_]
     obs_dt[dbh == 0, dbh := NA_real_]
-
+    
     cohorts_dt = fread(paste0(i_dir,"/initial_cohorts_",cv_S,"_",cv_T,"_train.csv"))
     # only pick columns siteID   dbh species patchID census trees cohortID
     cohorts_dt = cohorts_dt[,.(siteID, dbh, species, patchID, census, trees, cohortID)]
-
+    
     Nspecies = max(obs_dt$species)
     Nenv = ncol(env_dt) - 2
-
+    
     env_obs = merge(obs_dt, env_dt, by = c('year', "siteID"))
     ## get init parameters ####
     if(grepl("genus",i_name)){
-    ### growth ####
+      ### growth ####
       env_obs$species_fac <- as.factor(env_obs$species)
       growth_init_model = glmmTMB(log(growth+1)~1+Prec+SR_kW_m2+RH_prc+T_max+T_min+swp+(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp||species_fac), data = env_obs, family = gaussian())
       init_growth_env <- as.matrix(coef(growth_init_model)[[1]][[1]])
       init_growth_env[is.na(init_growth_env)] = 0
-    ### mort ####
+      ### mort ####
       env_obs$Fmort = scales::rescale(env_obs$mort, c(0.0001, 1-0.0001))
       env_obs$species_fac <- as.factor(env_obs$species)
       mort_init_model = glmmTMB(Fmort~1+Prec+SR_kW_m2+RH_prc+T_max+T_min+swp+(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp||species_fac), data = env_obs, family = beta_family())
       init_mort_env = as.matrix(coef(mort_init_model)[[1]][[1]])
       init_mort_env[is.na(init_mort_env)] = 0
-    ### reg ####
+      ### reg ####
       reg_init_model = glmmTMB(ceiling(reg)~1+Prec+SR_kW_m2+RH_prc+T_max+T_min+swp+(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp||species_fac), data = env_obs, family = "nbinom1")
       init_reg_env = as.matrix(coef(reg_init_model)[[1]][[1]])
-
+      
       ### fix missing species ####
       init_reg_env[is.na(init_reg_env)] = 0
       missing_species_growth <- setdiff(1:Nspecies, as.integer(rownames(init_growth_env)))
@@ -127,14 +127,14 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
         matrix(0, length(missing_species_growth), ncol(init_growth_env), dimnames = list(missing_species_growth, colnames(init_growth_env)))
       )
       init_growth_env <- init_growth_env[order(as.numeric(rownames(init_growth_env))), ]
-
+      
       missing_species_mort <- setdiff(1:Nspecies, as.integer(rownames(init_mort_env)))
       init_mort_env <- rbind(
         init_mort_env,
         matrix(0, length(missing_species_mort), ncol(init_mort_env), dimnames = list(missing_species_mort, colnames(init_mort_env)))
       )
       init_mort_env <- init_mort_env[order(as.numeric(rownames(init_mort_env))), ]
-
+      
       missing_species_reg <- setdiff(1:Nspecies, as.integer(rownames(init_reg_env)))
       init_reg_env <- rbind(
         init_reg_env,
@@ -142,21 +142,21 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
       )
       init_reg_env <- init_reg_env[order(as.numeric(rownames(init_reg_env))), ]
     }else if(grepl("pft", i_name)){
-    ### growth ####
+      ### growth ####
       growth_init_model = lm(log(growth+1)~(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp):as.factor(species)+as.factor(species)+0, data = env_obs)
       init_growth_env = matrix(coefficients(growth_init_model), Nspecies, Nenv+1)
       init_growth_env[is.na(init_growth_env)] = 0
-    ### mort ####
+      ### mort ####
       env_obs$Fmort = scales::rescale(env_obs$mort, c(0.0001, 1-0.0001))
       mort_init_model = glmmTMB(Fmort~(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp):as.factor(species)+as.factor(species)+0, data = env_obs, family = beta_family())
       init_mort_env = matrix(summary(mort_init_model)$coefficients$cond[,1], Nspecies, Nenv+1)
       init_mort_env[is.na(init_mort_env)] = 0
-    ### reg ####
+      ### reg ####
       reg_init_model = glmmTMB(reg~(Prec+SR_kW_m2+RH_prc+T_max+T_min+swp):as.factor(species)+as.factor(species)+0, data = env_obs, family = "nbinom1")
       init_reg_env = matrix(summary(reg_init_model)$coefficients$cond[,1], Nspecies, Nenv+1)
       init_reg_env[is.na(init_reg_env)] = 0
     }
-
+    
     max_vals = 1
     init_growth_env[init_growth_env > max_vals] = max_vals
     init_growth_env[init_growth_env < -max_vals] = -max_vals
@@ -164,23 +164,14 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
     init_mort_env[init_mort_env < -max_vals] = -max_vals
     init_reg_env[init_reg_env > max_vals] = max_vals
     init_reg_env[init_reg_env < -max_vals] = -max_vals
-
+    
     for(i_lossvar in all_lossvars[!(all_lossvars %in% obsNA)]){
       obs_dt[[i_lossvar]] = NA_real_
     }
     
-    if(grepl("Dropout", tf)) {
-      drop = 0.2
-    } else {
-      drop = 0.0
-    }
+    hybrid_growth = createHybrid(~., transformer = FALSE, dropout = 0.1, emb_dim = 2L)
     
-    if(grepl("Small", tf)) {
-      hybrid_growth = createHybrid(~., transformer = TRUE, emb_dim = 6L,dropout = drop, encoder_layers = 1L, dim_feedforward = 100L)
-    } else {
-      hybrid_growth = createHybrid(~., transformer = TRUE, emb_dim = 20L,dropout = drop, encoder_layers = 1L, dim_feedforward = 256L)
-    }
-
+    
     ## create model ####
     m1 = finn(
       N_species = Nspecies,
@@ -190,28 +181,28 @@ parallel::clusterExport(cl, varlist = c(ls(envir = .GlobalEnv)), envir = environ
       regeneration_process = createProcess(~., initEnv = list(init_reg_env), func = FINN::regeneration, optimizeSpecies = TRUE, optimizeEnv = TRUE),
       mortality_process = createProcess(~., initEnv = list(init_mort_env), func = FINN::mortality, optimizeSpecies = TRUE, optimizeEnv = TRUE)
     )
-
-    gh = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
-      g = (self$nn_growth(dbh = dbh, trees = trees, light = light, species = species, env = pred) - exp(1))$exp()
-      return(g)
-    }
-    m1$growth_func = m1$.__enclos_env__$private$set_environment(gh)
-
+    
+    
     cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = Nspecies)
-
+    
     Nsites = length(unique(obs_dt$siteID))
     batchsize = ceiling(((Nsites)/2)*0.8) # TODO change back
     Npatches = uniqueN(cohorts_dt$patchID)
-
-    source("code/99_cohort500fix.R")
+    
+    gh = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug = F, trees = NULL) {
+      g = (self$nn_growth(dbh = dbh, light = light, species = species, env = pred) - exp(1))$exp()
+      return(g)
+    }
+    m1$growth_func = m1$.__enclos_env__$private$set_environment(gh)
+    source("code/99_cohort500fix2.R")
     m1$fit(data = obs_dt, batchsize = batchsize, env = env_dt, init_cohort = cohort1,  epochs = Nepochs, patches = Npatches, lr = 0.01, checkpoints = Inf,
            optimizer = torch::optim_ignite_adam, device = "gpu", record_gradients = FALSE,weights = c(0.1, 10, 1.0, 10.0, 1, 1), plot_progress = FALSE,
            loss= c(dbh = "mse", ba = "mse", trees = "nbinom", growth = "mse", mortality = "mse", regeneration = "nbinom")
     )
-
+    
     if(!dir.exists(dirname(out_dir))) dir.create(dirname(out_dir), recursive = T)
     torch::torch_save(m1, out_dir)
-
+    
     #cat(paste("Finished", i_dir, i_cv, "at", Sys.time()), "\n", file = logfile, append = TRUE)
     rm(m1)
     gc()

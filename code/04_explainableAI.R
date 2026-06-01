@@ -23,7 +23,7 @@ Nenv = ncol(env_dt) - 2
 cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = Nspecies)
 
 # load models
-model_hybrid = torch::torch_load("results/02_realdata_hybrid_mortTF0/pft-period7-25patches_S0_T0.pt")
+model_hybrid = torch::torch_load("results/02_realdata_hybridTF0dropout0.1/pft-period7-25patches_S0_T0.pt")
 m_process = torch::torch_load("results/02_realdata/pft-period7-25patches_S0_T0_ba.trees.dbh.growth.mort.reg.pt")
 
 raw_debug = model_hybrid$simulate(env = env_dt, init_cohort = cohort1, patches = 25L, debug = F, device = "cpu")
@@ -32,7 +32,7 @@ raw_debug_process = m_process$simulate(env = env_dt, init_cohort = cohort1, patc
 
 ################ ALE Hybrid und process #################
 
-model_hybrid = torch::torch_load("results/02_realdata_hybridTF0/pft-period7-25patches_S0_T0.pt")
+model_hybrid = torch::torch_load("results/02_realdata_hybridTF0dropout0.1/pft-period7-25patches_S0_T0.pt")
 model_hybrid$raw_g = NULL
 model_hybrid$environment = NULL
 model_hybrid$eval()
@@ -54,7 +54,7 @@ gh = function(dbh, species, parGrowth, pred, light, light_steepness = 10, debug 
 unlockBinding(sym = "growth_func", model_hybrid$.__enclos_env__$self)
 model_hybrid$growth_func = model_hybrid$.__enclos_env__$private$set_environment(gh)
 cohort1 <- FINN::CohortMat(obs_df = cohorts_dt, sp = Nspecies)
-model_hybrid$eval()
+model_hybrid$train()
 raw_debug = model_hybrid$simulate(env = env_dt, init_cohort = cohort1, patches = 25L, debug = F, device = "cpu")
 site = 1
 patch = 1
@@ -79,42 +79,107 @@ df = df[df$dbh > 0.5,]
 
 df_results_ale = data.frame()
 for(i in 1:5) {
-  for(J in 1:100) {
+  SPECIES = i
+  df_sp1 = df[df$species == SPECIES,] %>% dplyr::select(-species)
+  indices = sample.int(nrow(df_sp1), 5000)
+  df_sp1 = df_sp1[indices,]
+  for(J in 1:20) {
     model_hybrid$train()
     model_hybrid$nn_growth$train()
-    SPECIES = i
-    df_sp1 = df[df$species == SPECIES,] %>% dplyr::select(-species)
-    indices = sample.int(nrow(df_sp1), 20000)
-    predict_function = function(model, newdata) {
-      
-      # inputs   dbh     light trees species Intercept Prec   SR_kW_m2   RH_prc    T_max    T_min         swp 
+
+    predict_function = function(X.model, newdata, type = NULL) {
+
+      # inputs   dbh     light trees species Intercept Prec   SR_kW_m2   RH_prc    T_max    T_min         swp
       sites = nrow(newdata)
       dbh = torch_tensor(array(newdata$dbh, dim = c(sites, 1, 1)), dtype = torch_float32(), device = model_hybrid$device)
       trees = torch_tensor(array(newdata$trees, dim = c(sites, 1, 1)), dtype = torch_float32(), device = model_hybrid$device)
       light = torch_tensor(array(newdata$light, dim = c(sites, 1, 1)), dtype = torch_float32(), device = model_hybrid$device)
       species = torch_tensor(array(SPECIES, dim = c(sites, 1, 1)), dtype = torch_long(), device = model_hybrid$device)
       pred = torch_tensor(as.matrix(newdata |> dplyr::select(intercept, Prec, SR_kW_m2, RH_prc, T_max, T_min, swp)), device = model_hybrid$device)
-      
-      g = (model_hybrid$nn_growth(dbh = dbh, light = light,trees=trees, species = species, env = pred) - exp(1))$exp()
+
+      g = (model_hybrid$nn_growth(dbh = dbh, light = light,trees=trees, species = species, env = pred) - exp(1))$exp() 
       return((g$squeeze() %>% as.matrix())[,1])
     }
-    
-    
+
+
     set.seed(1)
-    expl = DALEX::explain(model_hybrid, data= (df_sp1 %>% dplyr::select(-time, -growth))[indices,],y = (df_sp1 %>% dplyr::select(-time))[indices,]$growth, predict_function =predict_function )
-    ale <- DALEX::model_profile(expl,
+    expl = DALEX::explain(model_hybrid, data= (df_sp1 %>% dplyr::select(-time, -growth)),y = (df_sp1 %>% dplyr::select(-time))$growth*(df_sp1 %>% dplyr::select(-time))$dbh, predict_function =predict_function )
+    ale2 <- DALEX::model_profile(expl,
                                 #variables = "light",
                                 method = "ale",
-                                center = FALSE, grid_points = 10) 
-    # model_parts(expl) |> plot()
-    #plot(ale)
-    df_tmp = ale$agr_profiles 
+                                center = FALSE, grid_points = 900)
+    df_tmp = ale2$agr_profiles
+    
+    
+    
+    # 
+    # 
+    # library(ale)
+    # predict_function = function(object, newdata, type = NULL) {
+    #   
+    #   # inputs   dbh     light trees species Intercept Prec   SR_kW_m2   RH_prc    T_max    T_min         swp
+    #   sites = nrow(newdata)
+    #   dbh = torch_tensor(array(newdata$dbh, dim = c(sites, 1, 1)), dtype = torch_float32(), device = model_hybrid$device)
+    #   trees = torch_tensor(array(newdata$trees, dim = c(sites, 1, 1)), dtype = torch_float32(), device = model_hybrid$device)
+    #   light = torch_tensor(array(newdata$light, dim = c(sites, 1, 1)), dtype = torch_float32(), device = model_hybrid$device)
+    #   species = torch_tensor(array(SPECIES, dim = c(sites, 1, 1)), dtype = torch_long(), device = model_hybrid$device)
+    #   pred = torch_tensor(as.matrix(newdata |> dplyr::select(intercept, Prec, SR_kW_m2, RH_prc, T_max, T_min, swp)), device = model_hybrid$device)
+    #   
+    #   g = (model_hybrid$nn_growth(dbh = dbh, light = light,trees=trees, species = species, env = pred) - exp(1))$exp()
+    #   return((g$squeeze() %>% as.matrix())[,1])
+    # }
+    # ale_obj <- ale::ALE(
+    #   data   = (df_sp1 %>% mutate(rel_growth = growth) |> dplyr::select(-time, -growth)),
+    #   model  = model_hybrid,
+    #   pred_fun = predict_function,
+    #   y_col = "rel_growth",
+    #   max_num_bins = 10,
+    #   x_cols = list(d2 = c("dbh:light"))  # d2 = 2D interactions
+    # )
+    # plot(ale_obj)
+    # 
+    # ce = marginalEffectsGeneric(model_hybrid, df_sp1 %>% dplyr::select(-time, -growth), predict_func = predict_function, interactions = TRUE)
+    # ale = ALE_ce_2d(df_sp1 %>% dplyr::select(-time, -growth) |> as.data.frame(), ce = ce$result, j1 = 10, j2 = 2, predictions = df_sp1 %>% dplyr::pull(growth), center = FALSE)
+    # library(ggplot2)
+    # ggplot(ale, aes(x = x1, y = x2, z = ale)) +
+    #   geom_contour_filled(bins = 12) +
+    #   labs(x = df$var1[1], y = ale$var2[1], fill = "ALE") +
+    #   theme_minimal()
+    # ale = ALE_ce(df_sp1 %>% dplyr::select(-time, -growth) |> as.data.frame(), ce = apply(ce$result, 1, diag) |> t(), predictions = df_sp1 %>% dplyr::pull(growth), center = FALSE)
+    # 
+    # sites = nrow(df_sp1)
+    # dbh = torch_tensor(array(df_sp1$dbh, dim = c(sites, 1, 1)), dtype = torch_float32(), device = model_hybrid$device, requires_grad = TRUE)
+    # trees = torch_tensor(array(df_sp1$trees, dim = c(sites, 1, 1)), dtype = torch_float32(), device = model_hybrid$device, requires_grad = FALSE)
+    # light = torch_tensor(array(df_sp1$light, dim = c(sites, 1, 1)), dtype = torch_float32(), device = model_hybrid$device, requires_grad = TRUE)
+    # species = torch_tensor(array(SPECIES, dim = c(sites, 1, 1)), dtype = torch_long(), device = model_hybrid$device)
+    # pred = torch_tensor(as.matrix(df_sp1 |> dplyr::select(intercept, Prec, SR_kW_m2, RH_prc, T_max, T_min, swp)), device = model_hybrid$device, requires_grad = TRUE)
+    # g = (model_hybrid$nn_growth(dbh = dbh, light = light,trees=trees, species = species, env = pred) - exp(1))$exp()
+    # 
+    # grads_dbh = torch::autograd_grad(g, dbh, grad_outputs = torch::torch_ones_like(g), retain_graph = TRUE, create_graph = TRUE)[[1]]$squeeze() |> as.numeric()
+    # grads_light= torch::autograd_grad(g, light, grad_outputs = torch::torch_ones_like(g), retain_graph = TRUE, create_graph = TRUE)[[1]]$squeeze() |> as.numeric()
+    # grads_pred = torch::autograd_grad(g, pred, grad_outputs = torch::torch_ones_like(g), retain_graph = TRUE)[[1]]$squeeze() |> as.matrix()
+    # 
+    # grads = cbind(grads_dbh, grads_light, grads_pred)
+    # 
+    # 
+    # grads_dbh
+    # 
+
+    
+    # 
+    # ale = ALE_ce(X = df_sp1 %>% dplyr::select(-time, -growth) |> select(dbh, light, intercept, Prec, SR_kW_m2, RH_prc, T_max, T_min, swp) |> as.matrix(), grads, 
+    #              predictions = g$squeeze() |> as.numeric(),center = FALSE)
+    # colnames(ale) = c("_x_", "_yhat_", "_vname_")
+    # 
+    # df_tmp = ale
+    # 
     df_tmp$species = SPECIES
     df_tmp$sample = J
     df_results_ale = rbind(df_results_ale, df_tmp)
   }
 }
 
+#colnames(df_results_ale) = c("x", "y", "features", "species", "sample")
 
 colnames(df_results_ale) = c("features", "label", "x", "y", "ids", "species", "sample")
 
